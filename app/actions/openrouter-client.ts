@@ -1,3 +1,5 @@
+"use server"
+
 interface OpenRouterResponse {
   choices: {
     message: {
@@ -16,6 +18,11 @@ export async function callOpenRouter(prompt: string): Promise<string> {
 
     console.log("Calling OpenRouter API with prompt...")
 
+    // Using a valid model ID that OpenRouter supports
+    const model = "deepseek/deepseek-coder"
+
+    console.log(`Using model: ${model}`)
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -25,7 +32,7 @@ export async function callOpenRouter(prompt: string): Promise<string> {
         "X-Title": "Soundfeed Tools",
       },
       body: JSON.stringify({
-        model: "deepseek-ai/deepseek-chat",
+        model,
         messages: [
           {
             role: "system",
@@ -44,7 +51,7 @@ export async function callOpenRouter(prompt: string): Promise<string> {
     if (!response.ok) {
       const errorText = await response.text()
       console.error("OpenRouter API error:", errorText)
-      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`)
+      throw new Error(`OpenRouter API error: ${errorText}`)
     }
 
     // First get the response as text
