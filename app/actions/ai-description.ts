@@ -10,8 +10,6 @@ export async function generateSongDescription(
   additionalInfo: string,
 ): Promise<string> {
   try {
-    console.log("Generating song description for:", { artist, title, genre, mood })
-
     // Create a prompt that explicitly asks for a description of exactly 490-500 characters
     const prompt = `
 Write a captivating song description for "${title}" by ${artist}.
@@ -33,30 +31,31 @@ The description should be engaging, professional, and highlight the unique aspec
 Count your characters carefully and ensure the description has a proper ending with no cut-off sentences.
 `.trim()
 
-    // Add a timeout to the API call to prevent hanging
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000)
-    })
+    // Call the OpenRouter API directly with error handling
+    try {
+      const description = await callOpenRouter(prompt)
 
-    const description = (await Promise.race([callOpenRouter(prompt), timeoutPromise])) as string
+      // Ensure the description is within the character limit
+      if (description.length > 500) {
+        console.log(`Description too long (${description.length} chars), trimming...`)
 
-    // Ensure the description is within the character limit
-    if (description.length > 500) {
-      console.log(`Description too long (${description.length} chars), trimming...`)
+        // Find the last period before 500 characters to avoid cutting mid-sentence
+        const lastPeriodIndex = description.lastIndexOf(".", 500)
+        if (lastPeriodIndex > 450) {
+          return description.substring(0, lastPeriodIndex + 1)
+        }
 
-      // Find the last period before 500 characters to avoid cutting mid-sentence
-      const lastPeriodIndex = description.lastIndexOf(".", 500)
-      if (lastPeriodIndex > 450) {
-        return description.substring(0, lastPeriodIndex + 1)
+        // If no good period found, just trim to 500
+        return description.substring(0, 500)
       }
 
-      // If no good period found, just trim to 500
-      return description.substring(0, 500)
+      return description
+    } catch (apiError) {
+      console.error("API call failed:", apiError)
+      throw new Error(`API call failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`)
     }
-
-    return description
   } catch (error) {
     console.error("Error generating song description:", error)
-    throw new Error(`Failed to generate song description: ${error instanceof Error ? error.message : String(error)}`)
+    throw error
   }
 }

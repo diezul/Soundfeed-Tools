@@ -49,7 +49,13 @@ export default function SongDescriptionPage() {
       setError(null)
       setDescription("Generating your song description... This may take a moment.")
 
-      const result = await generateSongDescription(artistName, songTitle, genre, mood, additionalInfo)
+      // Add a timeout to prevent the request from hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000)
+      })
+
+      const resultPromise = generateSongDescription(artistName, songTitle, genre, mood, additionalInfo)
+      const result = (await Promise.race([resultPromise, timeoutPromise])) as string
 
       // Only update if we're still in generating state (user hasn't cancelled)
       if (isGenerating) {
@@ -63,7 +69,19 @@ export default function SongDescriptionPage() {
       console.error("Error generating description:", error)
       setDescription("")
 
-      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred. Please try again."
+      let errorMessage = "An unexpected error occurred. Please try again."
+
+      if (error instanceof Error) {
+        errorMessage = error.message
+
+        // Check for specific error types
+        if (errorMessage.includes("API key")) {
+          errorMessage = "OpenRouter API key issue. Please check your environment variables."
+        } else if (errorMessage.includes("timed out")) {
+          errorMessage = "Request timed out. The API may be experiencing high traffic. Please try again."
+        }
+      }
+
       setError(errorMessage)
 
       toast({
@@ -110,9 +128,7 @@ export default function SongDescriptionPage() {
           <AlertDescription>
             {error}
             <div className="mt-2">
-              <p className="text-sm">
-                Make sure the OpenRouter API key is properly configured in the environment variables.
-              </p>
+              <p className="text-sm">If this error persists, please contact support with the error details.</p>
             </div>
           </AlertDescription>
         </Alert>

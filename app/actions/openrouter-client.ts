@@ -10,13 +10,17 @@ interface OpenRouterResponse {
 
 export async function callOpenRouter(prompt: string): Promise<string> {
   try {
+    // Access the environment variable directly
     const apiKey = process.env.OPENROUTER_API_KEY
 
+    // Log for debugging (will be removed in production)
+    console.log("API Key available:", !!apiKey)
+
     if (!apiKey) {
-      throw new Error("OpenRouter API key is not configured in environment variables")
+      throw new Error("OpenRouter API key is missing. Please check your environment variables.")
     }
 
-    console.log("Calling OpenRouter API with prompt...")
+    console.log("Calling OpenRouter API...")
 
     const model = "deepseek/deepseek-r1-0528:free"
     console.log(`Using model: ${model}`)
@@ -49,9 +53,6 @@ export async function callOpenRouter(prompt: string): Promise<string> {
 
     // First get the response as text
     const responseText = await response.text()
-
-    // Log the raw response for debugging
-    console.log("Raw API response:", responseText)
 
     // Try to parse the response as JSON
     let data: OpenRouterResponse
