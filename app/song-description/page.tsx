@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkles, Copy, AlertCircle, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { generateSongDescription } from "../actions/ai-description"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
 export default function SongDescriptionPage() {
   const [songTitle, setSongTitle] = useState("")
@@ -22,6 +23,7 @@ export default function SongDescriptionPage() {
   const [description, setDescription] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
   const [characterCount, setCharacterCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -44,23 +46,29 @@ export default function SongDescriptionPage() {
 
     try {
       setIsGenerating(true)
+      setError(null)
       setDescription("Generating your song description... This may take a moment.")
 
-      const result = await generateSongDescription(songTitle, artistName, genre, mood, additionalInfo)
+      const result = await generateSongDescription(artistName, songTitle, genre, mood, additionalInfo)
 
-      setDescription(result)
-
-      toast({
-        title: "Description generated!",
-        description: "Your song description has been created successfully.",
-      })
+      // Only update if we're still in generating state (user hasn't cancelled)
+      if (isGenerating) {
+        setDescription(result)
+        toast({
+          title: "Description generated!",
+          description: "Your song description has been created successfully.",
+        })
+      }
     } catch (error) {
       console.error("Error generating description:", error)
       setDescription("")
 
+      const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred. Please try again."
+      setError(errorMessage)
+
       toast({
         title: "Generation failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
+        description: errorMessage,
         variant: "destructive",
       })
     } finally {
@@ -76,6 +84,12 @@ export default function SongDescriptionPage() {
     })
   }
 
+  const handleCancel = () => {
+    setIsGenerating(false)
+    setDescription("")
+    setError(null)
+  }
+
   return (
     <div className="container max-w-5xl py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -88,6 +102,21 @@ export default function SongDescriptionPage() {
           Soundfeed A.I.
         </Badge>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            {error}
+            <div className="mt-2">
+              <p className="text-sm">
+                Make sure the OpenRouter API key is properly configured in the environment variables.
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
@@ -158,14 +187,21 @@ export default function SongDescriptionPage() {
             </form>
           </CardContent>
           <CardFooter>
-            <Button
-              type="submit"
-              form="description-form"
-              disabled={isGenerating || !songTitle || !artistName}
-              className="w-full"
-            >
-              {isGenerating ? "Generating..." : "Generate Description"}
-            </Button>
+            {isGenerating ? (
+              <div className="w-full flex gap-2">
+                <Button disabled className="flex-1">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating...
+                </Button>
+                <Button variant="outline" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button type="submit" form="description-form" disabled={!songTitle || !artistName} className="w-full">
+                Generate Description
+              </Button>
+            )}
           </CardFooter>
         </Card>
 
@@ -184,7 +220,16 @@ export default function SongDescriptionPage() {
           <CardContent>
             <div className={`p-4 rounded-md border min-h-[250px] ${description ? "bg-muted/50" : "bg-muted/20"}`}>
               {description ? (
-                <p className="whitespace-pre-wrap">{description}</p>
+                <p className="whitespace-pre-wrap">
+                  {description === "Generating your song description... This may take a moment." ? (
+                    <span className="flex items-center">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {description}
+                    </span>
+                  ) : (
+                    description
+                  )}
+                </p>
               ) : (
                 <p className="text-muted-foreground text-center italic mt-12">
                   Fill in the form and click "Generate Description" to create your song description
@@ -195,6 +240,7 @@ export default function SongDescriptionPage() {
           {description && description !== "Generating your song description... This may take a moment." && (
             <CardFooter>
               <Button onClick={handleCopy} className="w-full" variant="secondary">
+                <Copy className="mr-2 h-4 w-4" />
                 Copy to Clipboard
               </Button>
             </CardFooter>

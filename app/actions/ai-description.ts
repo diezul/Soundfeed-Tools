@@ -10,7 +10,7 @@ export async function generateSongDescription(
   additionalInfo: string,
 ): Promise<string> {
   try {
-    console.log("Generating song description for:", { artist, title, genre, mood, additionalInfo })
+    console.log("Generating song description for:", { artist, title, genre, mood })
 
     // Create a prompt that explicitly asks for a description of exactly 490-500 characters
     const prompt = `
@@ -25,15 +25,20 @@ IMPORTANT INSTRUCTIONS:
 - Just provide the description text directly.
 
 Details about the song:
-- Genre: ${genre}
-- Mood: ${mood}
+- Genre: ${genre || "Not specified"}
+- Mood: ${mood || "Not specified"}
 - Additional information: ${additionalInfo || "None provided"}
 
 The description should be engaging, professional, and highlight the unique aspects of the song.
 Count your characters carefully and ensure the description has a proper ending with no cut-off sentences.
 `.trim()
 
-    const description = await callOpenRouter(prompt)
+    // Add a timeout to the API call to prevent hanging
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000)
+    })
+
+    const description = (await Promise.race([callOpenRouter(prompt), timeoutPromise])) as string
 
     // Ensure the description is within the character limit
     if (description.length > 500) {

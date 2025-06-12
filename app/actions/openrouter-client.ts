@@ -10,18 +10,15 @@ interface OpenRouterResponse {
 
 export async function callOpenRouter(prompt: string): Promise<string> {
   try {
-    const apiKey =
-      process.env.OPENROUTER_API_KEY || "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"
+    const apiKey = process.env.OPENROUTER_API_KEY
 
     if (!apiKey) {
-      throw new Error("OpenRouter API key is not configured")
+      throw new Error("OpenRouter API key is not configured in environment variables")
     }
 
     console.log("Calling OpenRouter API with prompt...")
 
-    // Using the exact model ID from the user's example
     const model = "deepseek/deepseek-r1-0528:free"
-
     console.log(`Using model: ${model}`)
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
