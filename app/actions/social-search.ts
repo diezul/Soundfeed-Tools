@@ -1,16 +1,11 @@
 "use server"
 
-import { FACEBOOK_CONFIG } from "../config/facebook"
-
 interface SocialArtistResult {
   id: string
   name: string
   searchUrl: string
   directUrl?: string
   relevanceScore?: number
-  profilePicture?: string
-  followers?: number
-  verified?: boolean
 }
 
 interface SocialSearchResult {
@@ -19,28 +14,12 @@ interface SocialSearchResult {
   error?: string
 }
 
-interface InstagramProfileData {
-  profile_picture_url?: string
-  followers_count?: number
-  is_verified?: boolean
-  username?: string
-}
-
 // Format artist name for URL (replace spaces with appropriate characters)
 function formatNameForUrl(name: string): string {
   return encodeURIComponent(name.trim())
 }
 
-// Get Facebook access token
-async function getFacebookAccessToken(): Promise<string> {
-  const response = await fetch(
-    `${FACEBOOK_CONFIG.baseUrl}/oauth/access_token?client_id=${FACEBOOK_CONFIG.appId}&client_secret=${FACEBOOK_CONFIG.appSecret}&grant_type=client_credentials`
-  )
-  const data = await response.json()
-  return data.access_token
-}
-
-// Generate Instagram search results using Facebook Graph API
+// Generate Instagram search results
 export async function searchInstagramArtists(query: string): Promise<SocialSearchResult> {
   if (!query.trim()) {
     return {
@@ -50,50 +29,22 @@ export async function searchInstagramArtists(query: string): Promise<SocialSearc
   }
 
   try {
-    const accessToken = await getFacebookAccessToken()
     const formattedName = formatNameForUrl(query)
 
-    // Search for Instagram Business accounts
-    const response = await fetch(
-      `${FACEBOOK_CONFIG.baseUrl}/${FACEBOOK_CONFIG.apiVersion}/instagram_oembed?url=https://www.instagram.com/${formattedName}&access_token=${accessToken}`
-    )
+    // Create a direct URL to Instagram profile if the name has no spaces
+    // This is a best guess and may not be accurate
+    const directUrl =
+      query.indexOf(" ") === -1 ? `https://www.instagram.com/${query.toLowerCase().replace(/[^\w]/g, "")}/` : undefined
 
-    if (!response.ok) {
-      // If the direct profile doesn't exist, fall back to search
-      const searchUrl = `https://www.instagram.com/explore/search/keyword/?q=${formattedName}`
-      return {
-        success: true,
-        data: [{
-          id: `instagram-${query}`,
-          name: query,
-          searchUrl,
-          relevanceScore: 0.5,
-        }],
-      }
-    }
-
-    const data = await response.json()
-    const directUrl = `https://www.instagram.com/${formattedName}/`
-
-    // Get additional profile information
-    const profileResponse = await fetch(
-      `${FACEBOOK_CONFIG.baseUrl}/${FACEBOOK_CONFIG.apiVersion}/instagram_business_account?fields=profile_picture_url,followers_count,username&access_token=${accessToken}`
-    )
-
-    let profileData: InstagramProfileData = {}
-    if (profileResponse.ok) {
-      profileData = await profileResponse.json()
-    }
+    // Create a search URL
+    const searchUrl = `https://www.instagram.com/explore/search/keyword/?q=${formattedName}`
 
     const result: SocialArtistResult = {
       id: `instagram-${query}`,
       name: query,
-      searchUrl: directUrl,
+      searchUrl,
       directUrl,
-      relevanceScore: 1,
-      profilePicture: profileData.profile_picture_url,
-      followers: profileData.followers_count,
-      verified: profileData.is_verified,
+      relevanceScore: 1, // Always high since it's a direct name match
     }
 
     return {
@@ -101,15 +52,15 @@ export async function searchInstagramArtists(query: string): Promise<SocialSearc
       data: [result],
     }
   } catch (error) {
-    console.error("Error searching Instagram:", error)
+    console.error("Error creating Instagram search:", error)
     return {
       success: false,
-      error: "Failed to search Instagram. Please try again.",
+      error: "Failed to create Instagram search. Please try again.",
     }
   }
 }
 
-// Generate Facebook search results using Facebook Graph API
+// Generate Facebook search results
 export async function searchFacebookArtists(query: string): Promise<SocialSearchResult> {
   if (!query.trim()) {
     return {
@@ -119,79 +70,36 @@ export async function searchFacebookArtists(query: string): Promise<SocialSearch
   }
 
   try {
-    const accessToken = await getFacebookAccessToken()
     const formattedName = formatNameForUrl(query)
 
-    // Search for Facebook Pages
-    const pagesResponse = await fetch(
-      `${FACEBOOK_CONFIG.baseUrl}/${FACEBOOK_CONFIG.apiVersion}/pages/search?q=${formattedName}&fields=id,name,picture,fan_count,is_verified&access_token=${accessToken}`
-    )
+    // Create search URLs for different Facebook search types
+    const pagesSearchUrl = `https://www.facebook.com/search/pages?q=${formattedName}`
+    const peopleSearchUrl = `https://www.facebook.com/search/people?q=${formattedName}`
 
-    const pagesData = await pagesResponse.json()
-    const results: SocialArtistResult[] = []
-
-    if (pagesData.data && pagesData.data.length > 0) {
-      pagesData.data.forEach((page: any) => {
-        results.push({
-          id: `facebook-page-${page.id}`,
-          name: page.name,
-          searchUrl: `https://www.facebook.com/${page.id}`,
-          directUrl: `https://www.facebook.com/${page.id}`,
-          relevanceScore: 1,
-          profilePicture: page.picture?.data?.url,
-          followers: page.fan_count,
-          verified: page.is_verified,
-        })
-      })
-    }
-
-    // Search for Facebook Profiles
-    const profilesResponse = await fetch(
-      `${FACEBOOK_CONFIG.baseUrl}/${FACEBOOK_CONFIG.apiVersion}/users/search?q=${formattedName}&fields=id,name,picture&access_token=${accessToken}`
-    )
-
-    const profilesData = await profilesResponse.json()
-
-    if (profilesData.data && profilesData.data.length > 0) {
-      profilesData.data.forEach((profile: any) => {
-        results.push({
-          id: `facebook-profile-${profile.id}`,
-          name: profile.name,
-          searchUrl: `https://www.facebook.com/${profile.id}`,
-          directUrl: `https://www.facebook.com/${profile.id}`,
-          relevanceScore: 0.8,
-          profilePicture: profile.picture?.data?.url,
-        })
-      })
-    }
-
-    if (results.length === 0) {
-      // Fallback to search URLs if no API results
-      results.push(
-        {
-          id: `facebook-pages-${query}`,
-          name: `${query} (Pages)`,
-          searchUrl: `https://www.facebook.com/search/pages?q=${formattedName}`,
-          relevanceScore: 0.5,
-        },
-        {
-          id: `facebook-people-${query}`,
-          name: `${query} (People)`,
-          searchUrl: `https://www.facebook.com/search/people?q=${formattedName}`,
-          relevanceScore: 0.4,
-        }
-      )
-    }
+    const results: SocialArtistResult[] = [
+      {
+        id: `facebook-pages-${query}`,
+        name: `${query} (Pages)`,
+        searchUrl: pagesSearchUrl,
+        relevanceScore: 1,
+      },
+      {
+        id: `facebook-people-${query}`,
+        name: `${query} (People)`,
+        searchUrl: peopleSearchUrl,
+        relevanceScore: 0.8,
+      },
+    ]
 
     return {
       success: true,
       data: results,
     }
   } catch (error) {
-    console.error("Error searching Facebook:", error)
+    console.error("Error creating Facebook search:", error)
     return {
       success: false,
-      error: "Failed to search Facebook. Please try again.",
+      error: "Failed to create Facebook search. Please try again.",
     }
   }
 }

@@ -44,9 +44,6 @@ interface SocialArtistResult {
   searchUrl: string
   directUrl?: string
   relevanceScore?: number
-  profilePicture?: string
-  followers?: number
-  verified?: boolean
 }
 
 type SortOption = "relevance" | "popularity" | "followers"
@@ -611,37 +608,13 @@ export default function ArtistFinder() {
                             key={result.id}
                             className="flex items-center p-4 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
                           >
-                            <div className="relative h-16 w-16 rounded-full overflow-hidden mr-4 flex-shrink-0">
-                              {result.profilePicture ? (
-                                <Image
-                                  src={result.profilePicture}
-                                  alt={result.name}
-                                  fill
-                                  className="object-cover"
-                                  sizes="64px"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-[#E1306C]/20">
-                                  <Instagram className="h-8 w-8 text-[#E1306C]" />
-                                </div>
-                              )}
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#E1306C]/20 mr-4 flex-shrink-0">
+                              <Instagram className="h-8 w-8 text-[#E1306C]" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-medium text-lg truncate">{result.name}</h3>
-                                {result.verified && (
-                                  <Badge variant="secondary" className="bg-[#E1306C]/20 text-[#E1306C] border-[#E1306C]/30">
-                                    Verified
-                                  </Badge>
-                                )}
-                              </div>
-                              {result.followers && (
-                                <p className="text-sm text-gray-400">
-                                  {result.followers.toLocaleString()} followers
-                                </p>
-                              )}
+                              <h3 className="font-medium text-lg truncate">{result.name}</h3>
                               <p className="text-sm text-gray-400">
-                                {result.directUrl ? "Direct profile" : "Search results"}
+                                {result.directUrl ? "Possible direct profile" : "Search results"}
                               </p>
                             </div>
                             <div className="flex flex-col space-y-2 ml-2">
@@ -717,62 +690,23 @@ export default function ArtistFinder() {
                             key={result.id}
                             className="flex items-center p-4 rounded-md bg-white/5 hover:bg-white/10 transition-colors"
                           >
-                            <div className="relative h-16 w-16 rounded-full overflow-hidden mr-4 flex-shrink-0">
-                              {result.profilePicture ? (
-                                <Image
-                                  src={result.profilePicture}
-                                  alt={result.name}
-                                  fill
-                                  className="object-cover"
-                                  sizes="64px"
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center bg-[#1877F2]/20">
-                                  <Facebook className="h-8 w-8 text-[#1877F2]" />
-                                </div>
-                              )}
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1877F2]/20 mr-4 flex-shrink-0">
+                              <Facebook className="h-8 w-8 text-[#1877F2]" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-medium text-lg truncate">{result.name}</h3>
-                                {result.verified && (
-                                  <Badge variant="secondary" className="bg-[#1877F2]/20 text-[#1877F2] border-[#1877F2]/30">
-                                    Verified
-                                  </Badge>
-                                )}
-                              </div>
-                              {result.followers && (
-                                <p className="text-sm text-gray-400">
-                                  {result.followers.toLocaleString()} followers
-                                </p>
-                              )}
-                              <p className="text-sm text-gray-400">
-                                {result.directUrl ? "Direct profile" : "Search results"}
-                              </p>
+                              <h3 className="font-medium text-lg truncate">{result.name}</h3>
+                              <p className="text-sm text-gray-400">Search results</p>
                             </div>
                             <div className="flex flex-col space-y-2 ml-2">
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="h-8 px-2"
-                                onClick={() => copyToClipboard(result.directUrl || result.searchUrl, result.name)}
+                                onClick={() => copyToClipboard(result.searchUrl, result.name)}
                               >
                                 <Copy className="h-3 w-3 mr-1" />
                                 Copy
                               </Button>
-                              {result.directUrl && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-8 bg-[#1877F2]/20 hover:bg-[#1877F2]/30 border-[#1877F2]/30"
-                                  asChild
-                                >
-                                  <a href={result.directUrl} target="_blank" rel="noopener noreferrer">
-                                    <ExternalLink className="h-3 w-3 mr-1" />
-                                    Profile
-                                  </a>
-                                </Button>
-                              )}
                               <Button
                                 size="sm"
                                 variant="outline"

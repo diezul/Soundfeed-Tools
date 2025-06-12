@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users } from "lucide-react"
+import { Home, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users, Sparkles } from "lucide-react"
 import NextImage from "next/image"
 import Link from "next/link"
 import {
@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { usePathname } from "next/navigation"
+import { Badge } from "@/components/ui/badge"
 
 export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean }) {
   const pathname = usePathname()
@@ -58,6 +59,15 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
       icon: Users,
       href: "/artist-finder",
     },
+    {
+      title: "Song Description",
+      icon: Sparkles,
+      href: "/song-description",
+      badge: {
+        text: "Soundfeed A.I.",
+        variant: "purple",
+      },
+    },
   ]
 
   return (
@@ -80,7 +90,19 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
               <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
                 <Link href={item.href}>
                   <item.icon />
-                  <span>{item.title}</span>
+                  <span className="flex items-center">
+                    {item.title}
+                    {item.badge && (
+                      <Badge
+                        variant="outline"
+                        className={`ml-2 text-[0.6rem] py-0 px-1 inline-flex items-center
+                          ${item.badge.variant === "purple" ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : ""}`}
+                      >
+                        <Sparkles className="h-2 w-2 mr-1" />
+                        {item.badge.text}
+                      </Badge>
+                    )}
+                  </span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
