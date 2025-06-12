@@ -1,10 +1,9 @@
 "use client"
 
-import { ArrowLeft, Menu, Home, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users, Sparkles } from "lucide-react"
+import { ArrowLeft, Menu, Home, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { usePathname, useRouter } from "next/navigation"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Badge } from "@/components/ui/badge"
 
 export function MobileHeader() {
   const pathname = usePathname()
@@ -29,8 +28,6 @@ export function MobileHeader() {
         return "ISRC & UPC Finder"
       case "/artist-finder":
         return "Artist Finder"
-      case "/song-description":
-        return "Song Description"
       default:
         return "Soundfeed Tools"
     }
@@ -44,18 +41,7 @@ export function MobileHeader() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
         )}
-        <h1 className="text-lg font-medium">
-          {getPageTitle()}
-          {pathname === "/song-description" && (
-            <Badge
-              variant="outline"
-              className="ml-2 bg-purple-500/20 text-purple-300 border-purple-500/30 text-[0.6rem]"
-            >
-              <Sparkles className="h-2 w-2 mr-1" />
-              Soundfeed A.I.
-            </Badge>
-          )}
-        </h1>
+        <h1 className="text-lg font-medium">{getPageTitle()}</h1>
       </div>
       <Sheet>
         <SheetTrigger asChild>
@@ -115,21 +101,6 @@ export function MobileHeader() {
                 <a href="/artist-finder">
                   <Users className="mr-2 h-4 w-4" />
                   Artist Finder
-                </a>
-              </Button>
-              <Button variant="ghost" className="w-full justify-start items-center" asChild>
-                <a href="/song-description">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  <span className="flex items-center">
-                    Song Description
-                    <Badge
-                      variant="outline"
-                      className="ml-2 bg-purple-500/20 text-purple-300 border-purple-500/30 text-[0.6rem] inline-flex items-center"
-                    >
-                      <Sparkles className="h-2 w-2 mr-1" />
-                      A.I.
-                    </Badge>
-                  </span>
                 </a>
               </Button>
             </nav>

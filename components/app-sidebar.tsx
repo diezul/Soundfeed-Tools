@@ -88,14 +88,14 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
-                <Link href={item.href}>
-                  <item.icon />
-                  <span className="flex items-center">
+                <Link href={item.href} className="flex items-center w-full">
+                  <item.icon className="shrink-0" />
+                  <span className="flex items-center truncate">
                     {item.title}
                     {item.badge && (
                       <Badge
                         variant="outline"
-                        className={`ml-2 text-[0.6rem] py-0 px-1 inline-flex items-center
+                        className={`ml-2 text-[0.6rem] py-0 px-1 inline-flex items-center whitespace-nowrap
                           ${item.badge.variant === "purple" ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : ""}`}
                       >
                         <Sparkles className="h-2 w-2 mr-1" />

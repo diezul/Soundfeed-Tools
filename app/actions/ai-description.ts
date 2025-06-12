@@ -2,102 +2,62 @@
 
 import { callOpenRouter } from "./openrouter-client"
 
-interface DescriptionRequest {
-  songTitle: string
-  artistInfo: string
-  promotionInfo: string
-  genre: string
-  mood: string
-  additionalInfo: string
-  apiKey?: string
-}
-
-export async function generateSongDescription(requestData: DescriptionRequest): Promise<{
-  success: boolean
-  description?: string
-  error?: string
-}> {
+export async function generateSongDescription(
+  songTitle: string,
+  artistName: string,
+  genre: string,
+  mood: string,
+  additionalInfo: string,
+): Promise<string> {
   try {
-    const data = requestData
-
-    // Construct a more specific prompt that emphasizes the character limit
+    // Create a prompt that explicitly asks for a description of exactly 490-500 characters
     const prompt = `
-      Write a compelling song description for distribution platforms like Spotify and Apple Music.
+      Write a captivating and professional description for the song "${songTitle}" by ${artistName}.
+      
+      Genre: ${genre}
+      Mood: ${mood}
+      Additional information: ${additionalInfo}
       
       IMPORTANT: The description MUST be EXACTLY between 490-500 characters total. Not words, but characters.
       This is a strict requirement - the description must be complete and coherent within this limit.
       
-      Details about the song:
-      - Title: ${data.songTitle}
-      - Artist Information: ${data.artistInfo}
-      - Promotion Information: ${data.promotionInfo}
-      - Genre: ${data.genre}
-      - Mood: ${data.mood}
-      - Additional Information: ${data.additionalInfo}
+      The description should:
+      - Be engaging and professional
+      - Highlight the song's unique qualities
+      - Mention the artist's name and song title naturally
+      - Reflect the genre and mood provided
+      - Include any relevant details from the additional information
+      - Have a proper ending with no cut-off sentences
+      - Be EXACTLY 490-500 characters in length (count carefully)
       
-      Guidelines:
-      - Create a captivating description that highlights the song's unique qualities
-      - Ensure the description is engaging and entices listeners
-      - Do NOT use hashtags or emojis
-      - Make sure the description has a proper ending (no cut-off sentences)
-      - Count the characters carefully to ensure it's between 490-500 characters
-      - Only return the description text without any additional commentary
-      
-      Remember: The EXACT character count must be between 490-500 characters, including spaces and punctuation.
+      DO NOT exceed 500 characters or write less than 490 characters. Count spaces, punctuation, and all characters.
+      DO NOT include a character count in your response.
+      DO NOT include any disclaimers, notes, or anything other than the description itself.
     `
 
-    // Call the OpenRouter API using our client
-    const result = await callOpenRouter(prompt, "deepseek/deepseek-r1-0528:free", data.apiKey)
+    // Call the OpenRouter API
+    const description = await callOpenRouter(prompt)
 
-    if (!result.success) {
-      return {
-        success: false,
-        error: result.error || "Failed to generate description",
-      }
-    }
-
-    const responseData = result.data
-    let description = responseData.choices[0].message.content.trim()
-
-    // Check if the description is within our target range
-    if (description.length < 490) {
-      return {
-        success: false,
-        error: `The generated description is too short (${description.length} characters). Please try again.`,
-      }
-    }
-
-    // If it's too long, trim it properly to 497 characters and add "..."
+    // Ensure the description is within our character limit
     if (description.length > 500) {
-      // Find the last complete sentence that fits within our limit
-      const sentences = description.match(/[^.!?]+[.!?]+/g) || []
-      let trimmedDescription = ""
-
-      for (const sentence of sentences) {
-        if ((trimmedDescription + sentence).length <= 497) {
-          trimmedDescription += sentence
-        } else {
-          break
-        }
-      }
-
-      // If we couldn't find a good sentence break, just trim at 497
-      if (trimmedDescription.length === 0 || trimmedDescription.length < 400) {
-        description = description.substring(0, 497) + "..."
-      } else {
-        description = trimmedDescription.trim()
-      }
+      // Find the last sentence that fits within 500 characters
+      const truncated = findLastCompleteSentence(description.substring(0, 500))
+      return truncated
     }
 
-    return {
-      success: true,
-      description,
-    }
+    return description
   } catch (error) {
     console.error("Error generating song description:", error)
-    return {
-      success: false,
-      error: `An unexpected error occurred: ${error instanceof Error ? error.message : String(error)}`,
-    }
+    throw new Error(`Failed to generate song description: ${error instanceof Error ? error.message : String(error)}`)
   }
+}
+
+// Helper function to find the last complete sentence within a text
+function findLastCompleteSentence(text: string): string {
+  // Look for the last period, question mark, or exclamation mark followed by a space or end of string
+  const match = text.match(/^(.*?[.!?])(?:\s|$)/)
+  if (match) {
+    return match[1]
+  }
+  return text // If no sentence ending is found, return the original text
 }

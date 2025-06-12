@@ -1,37 +1,20 @@
-"use server"
-
 interface OpenRouterResponse {
-  id: string
-  object: string
-  created: number
-  model: string
   choices: {
     message: {
-      role: string
       content: string
     }
-    index: number
-    finish_reason: string
   }[]
 }
 
-export async function callOpenRouter(
-  prompt: string,
-  model = "deepseek/deepseek-r1-0528:free",
-  clientApiKey?: string,
-): Promise<{ success: boolean; data?: any; error?: string }> {
+export async function callOpenRouter(prompt: string): Promise<string> {
   try {
-    // Use environment variable API key
     const apiKey = process.env.OPENROUTER_API_KEY
 
     if (!apiKey) {
-      return {
-        success: false,
-        error: "OpenRouter API key is not configured in environment variables",
-      }
+      throw new Error("OpenRouter API key is not configured")
     }
 
-    console.log(`Making request to OpenRouter API using model: ${model}`)
+    console.log("Calling OpenRouter API with prompt...")
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -42,58 +25,52 @@ export async function callOpenRouter(
         "X-Title": "Soundfeed Tools",
       },
       body: JSON.stringify({
-        model,
+        model: "deepseek-ai/deepseek-chat",
         messages: [
+          {
+            role: "system",
+            content: "You are a helpful assistant that writes engaging song descriptions.",
+          },
           {
             role: "user",
             content: prompt,
           },
         ],
+        temperature: 0.7,
+        max_tokens: 500,
       }),
     })
 
-    console.log(`OpenRouter API response status: ${response.status} ${response.statusText}`)
-
-    // Get the response as text first
-    const responseText = await response.text()
-
-    // Check if we got a valid response
-    if (!responseText || !responseText.trim()) {
-      return {
-        success: false,
-        error: "Received empty response from API",
-      }
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error("OpenRouter API error:", errorText)
+      throw new Error(`OpenRouter API error: ${response.status} ${response.statusText}`)
     }
 
-    // Try to parse the JSON
-    let responseData: OpenRouterResponse
+    // First get the response as text
+    const responseText = await response.text()
+
+    // Log the raw response for debugging
+    console.log("Raw API response:", responseText)
+
+    // Try to parse the response as JSON
+    let data: OpenRouterResponse
     try {
-      responseData = JSON.parse(responseText)
-    } catch (parseError) {
-      console.error("Error parsing JSON response:", parseError)
-      return {
-        success: false,
-        error: `Failed to parse API response: ${responseText.substring(0, 100)}...`,
-      }
+      data = JSON.parse(responseText)
+    } catch (error) {
+      console.error("Failed to parse JSON response:", error)
+      throw new Error("Invalid JSON response from OpenRouter API")
     }
 
     // Validate the response structure
-    if (!responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
-      return {
-        success: false,
-        error: "Received an unexpected response format from the API.",
-      }
+    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
+      console.error("Unexpected response structure:", data)
+      throw new Error("Unexpected response structure from OpenRouter API")
     }
 
-    return {
-      success: true,
-      data: responseData,
-    }
+    return data.choices[0].message.content
   } catch (error) {
-    console.error("Error calling OpenRouter API:", error)
-    return {
-      success: false,
-      error: `API request failed: ${error instanceof Error ? error.message : String(error)}`,
-    }
+    console.error("Error calling OpenRouter:", error)
+    throw error
   }
 }

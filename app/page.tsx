@@ -1,8 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
-import { ArrowRight, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users, Sparkles } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+import { ArrowRight, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users } from "lucide-react"
 
 export default function Home() {
   const tools = [
@@ -48,16 +47,6 @@ export default function Home() {
       icon: Users,
       href: "/artist-finder",
     },
-    {
-      title: "Song Description",
-      description: "Generate compelling song descriptions for distribution platforms",
-      icon: Sparkles,
-      href: "/song-description",
-      badge: {
-        text: "Soundfeed A.I.",
-        variant: "purple",
-      },
-    },
   ]
 
   return (
@@ -71,21 +60,8 @@ export default function Home() {
         {tools.map((tool) => (
           <Card key={tool.title} className="overflow-hidden backdrop-blur-md bg-white/10 border-white/20 text-white">
             <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <div className="mb-2 w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                  <tool.icon className="h-6 w-6 text-primary" />
-                </div>
-                {tool.badge && (
-                  <Badge
-                    variant="outline"
-                    className={`inline-flex items-center
-                      ${tool.badge.variant === "purple" ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : ""}
-                    `}
-                  >
-                    <Sparkles className="h-3 w-3 mr-1" />
-                    {tool.badge.text}
-                  </Badge>
-                )}
+              <div className="mb-2 w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                <tool.icon className="h-6 w-6 text-primary" />
               </div>
               <CardTitle>{tool.title}</CardTitle>
               <CardDescription className="text-gray-300">{tool.description}</CardDescription>
