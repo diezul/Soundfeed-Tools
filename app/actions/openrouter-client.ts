@@ -1,77 +1,54 @@
 "use server"
 
-interface OpenRouterResponse {
-  choices: {
-    message: {
-      content: string
-    }
-  }[]
+// Simple function to test if the API key is valid
+export async function testApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/auth/key", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    })
+    return response.ok
+  } catch (error) {
+    console.error("Error testing API key:", error)
+    return false
+  }
 }
 
+// Main OpenRouter client function - keeping the original name for compatibility
 export async function callOpenRouter(prompt: string): Promise<string> {
-  try {
-    // Access the environment variable directly
-    const apiKey = process.env.OPENROUTER_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
 
-    // Log for debugging (will be removed in production)
-    console.log("API Key available:", !!apiKey)
-
-    if (!apiKey) {
-      throw new Error("OpenRouter API key is missing. Please check your environment variables.")
-    }
-
-    console.log("Calling OpenRouter API...")
-
-    const model = "deepseek/deepseek-r1-0528:free"
-    console.log(`Using model: ${model}`)
-
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://soundfeed.tools",
-        "X-Title": "Soundfeed Tools",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-      }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("OpenRouter API error:", errorText)
-      throw new Error(`OpenRouter API error: ${errorText}`)
-    }
-
-    // First get the response as text
-    const responseText = await response.text()
-
-    // Try to parse the response as JSON
-    let data: OpenRouterResponse
-    try {
-      data = JSON.parse(responseText)
-    } catch (error) {
-      console.error("Failed to parse JSON response:", error)
-      throw new Error("Invalid JSON response from OpenRouter API")
-    }
-
-    // Validate the response structure
-    if (!data.choices || !data.choices[0] || !data.choices[0].message || !data.choices[0].message.content) {
-      console.error("Unexpected response structure:", data)
-      throw new Error("Unexpected response structure from OpenRouter API")
-    }
-
-    return data.choices[0].message.content
-  } catch (error) {
-    console.error("Error calling OpenRouter:", error)
-    throw error
+  if (!apiKey) {
+    throw new Error("API key is missing")
   }
+
+  // Test if the API key is valid
+  const isValid = await testApiKey(apiKey)
+  if (!isValid) {
+    throw new Error("Invalid API key")
+  }
+
+  // Make the actual request
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": "https://soundfeed.tools",
+    },
+    body: JSON.stringify({
+      model: "deepseek/deepseek-r1-0528:free",
+      messages: [{ role: "user", content: prompt }],
+    }),
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`API error: ${response.status} ${text}`)
+  }
+
+  const data = await response.json()
+  return data.choices[0].message.content
 }

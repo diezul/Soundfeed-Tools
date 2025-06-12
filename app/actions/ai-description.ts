@@ -3,59 +3,67 @@
 import { callOpenRouter } from "./openrouter-client"
 
 export async function generateSongDescription(
-  artist: string,
-  title: string,
+  songTitle: string,
+  artistName: string,
   genre: string,
   mood: string,
   additionalInfo: string,
-): Promise<string> {
+): Promise<{ success: boolean; description?: string; error?: string }> {
   try {
-    // Create a prompt that explicitly asks for a description of exactly 490-500 characters
-    const prompt = `
-Write a captivating song description for "${title}" by ${artist}.
-
-IMPORTANT INSTRUCTIONS:
-- The description MUST be EXACTLY between 490-500 characters total (not words, but characters).
-- This is a strict requirement - the description must be complete and coherent within this limit.
-- Do NOT exceed 500 characters.
-- Do NOT include a character count in your response.
-- Do NOT include any disclaimers, notes, or explanations.
-- Just provide the description text directly.
-
-Details about the song:
-- Genre: ${genre || "Not specified"}
-- Mood: ${mood || "Not specified"}
-- Additional information: ${additionalInfo || "None provided"}
-
-The description should be engaging, professional, and highlight the unique aspects of the song.
-Count your characters carefully and ensure the description has a proper ending with no cut-off sentences.
-`.trim()
-
-    // Call the OpenRouter API directly with error handling
-    try {
-      const description = await callOpenRouter(prompt)
-
-      // Ensure the description is within the character limit
-      if (description.length > 500) {
-        console.log(`Description too long (${description.length} chars), trimming...`)
-
-        // Find the last period before 500 characters to avoid cutting mid-sentence
-        const lastPeriodIndex = description.lastIndexOf(".", 500)
-        if (lastPeriodIndex > 450) {
-          return description.substring(0, lastPeriodIndex + 1)
-        }
-
-        // If no good period found, just trim to 500
-        return description.substring(0, 500)
+    if (!songTitle || !artistName) {
+      return {
+        success: false,
+        error: "Song title and artist name are required",
       }
+    }
 
-      return description
-    } catch (apiError) {
-      console.error("API call failed:", apiError)
-      throw new Error(`API call failed: ${apiError instanceof Error ? apiError.message : String(apiError)}`)
+    // Create a prompt for the AI
+    const prompt = `
+      Write a captivating song description for "${songTitle}" by ${artistName}.
+      
+      Genre: ${genre || "Not specified"}
+      Mood: ${mood || "Not specified"}
+      Additional information: ${additionalInfo || "None"}
+      
+      IMPORTANT: The description MUST be EXACTLY between 490-500 characters total. Not words, but characters.
+      This is a strict requirement - the description must be complete and coherent within this limit.
+      
+      Do not include the title or artist name in the description.
+      Focus on the song's sound, style, and emotional impact.
+      Use vivid language that captures the essence of the music.
+      Be concise but descriptive.
+      
+      Count your characters carefully and ensure the final description is between 490-500 characters.
+      The description should have a proper ending with no cut-off sentences.
+    `
+
+    // Call the OpenRouter API
+    const description = await callOpenRouter(prompt)
+
+    // Ensure the description is within the character limit
+    let finalDescription = description
+    if (finalDescription.length > 500) {
+      // Find the last sentence that fits within 500 characters
+      const sentences = finalDescription.match(/[^.!?]+[.!?]+/g) || []
+      finalDescription = ""
+      for (const sentence of sentences) {
+        if ((finalDescription + sentence).length <= 500) {
+          finalDescription += sentence
+        } else {
+          break
+        }
+      }
+    }
+
+    return {
+      success: true,
+      description: finalDescription,
     }
   } catch (error) {
     console.error("Error generating song description:", error)
-    throw error
+    return {
+      success: false,
+      error: `Failed to generate song description: ${error instanceof Error ? error.message : String(error)}`,
+    }
   }
 }

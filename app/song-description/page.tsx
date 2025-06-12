@@ -2,17 +2,16 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
-import { Sparkles, Copy, AlertCircle, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { Sparkles, Copy, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { generateSongDescription } from "../actions/ai-description"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { generateDescription } from "../actions/generate-description"
 
 export default function SongDescriptionPage() {
   const [songTitle, setSongTitle] = useState("")
@@ -22,15 +21,8 @@ export default function SongDescriptionPage() {
   const [additionalInfo, setAdditionalInfo] = useState("")
   const [description, setDescription] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
-  const [characterCount, setCharacterCount] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState("")
   const { toast } = useToast()
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  // Update character count when description changes
-  useEffect(() => {
-    setCharacterCount(description.length)
-  }, [description])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -46,46 +38,32 @@ export default function SongDescriptionPage() {
 
     try {
       setIsGenerating(true)
-      setError(null)
-      setDescription("Generating your song description... This may take a moment.")
+      setError("")
+      setDescription("Generating...")
 
-      // Add a timeout to prevent the request from hanging
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error("Request timed out after 30 seconds")), 30000)
-      })
+      const result = await generateDescription(songTitle, artistName, genre, mood, additionalInfo)
 
-      const resultPromise = generateSongDescription(artistName, songTitle, genre, mood, additionalInfo)
-      const result = (await Promise.race([resultPromise, timeoutPromise])) as string
-
-      // Only update if we're still in generating state (user hasn't cancelled)
-      if (isGenerating) {
-        setDescription(result)
+      if (result.success && result.description) {
+        setDescription(result.description)
         toast({
-          title: "Description generated!",
-          description: "Your song description has been created successfully.",
+          title: "Success!",
+          description: "Description generated successfully.",
+        })
+      } else {
+        setDescription("")
+        setError(result.error || "Failed to generate description")
+        toast({
+          title: "Error",
+          description: result.error || "Failed to generate description",
+          variant: "destructive",
         })
       }
-    } catch (error) {
-      console.error("Error generating description:", error)
+    } catch (err) {
       setDescription("")
-
-      let errorMessage = "An unexpected error occurred. Please try again."
-
-      if (error instanceof Error) {
-        errorMessage = error.message
-
-        // Check for specific error types
-        if (errorMessage.includes("API key")) {
-          errorMessage = "OpenRouter API key issue. Please check your environment variables."
-        } else if (errorMessage.includes("timed out")) {
-          errorMessage = "Request timed out. The API may be experiencing high traffic. Please try again."
-        }
-      }
-
+      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
       setError(errorMessage)
-
       toast({
-        title: "Generation failed",
+        title: "Error",
         description: errorMessage,
         variant: "destructive",
       })
@@ -102,12 +80,6 @@ export default function SongDescriptionPage() {
     })
   }
 
-  const handleCancel = () => {
-    setIsGenerating(false)
-    setDescription("")
-    setError(null)
-  }
-
   return (
     <div className="container max-w-5xl py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -122,16 +94,10 @@ export default function SongDescriptionPage() {
       </div>
 
       {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>
-            {error}
-            <div className="mt-2">
-              <p className="text-sm">If this error persists, please contact support with the error details.</p>
-            </div>
-          </AlertDescription>
-        </Alert>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-md p-4 text-red-500">
+          <p className="font-medium">Error:</p>
+          <p className="mt-1">{error}</p>
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -146,7 +112,6 @@ export default function SongDescriptionPage() {
                 <Label htmlFor="song-title">Song Title *</Label>
                 <Input
                   id="song-title"
-                  ref={inputRef}
                   value={songTitle}
                   onChange={(e) => setSongTitle(e.target.value)}
                   placeholder="Enter song title"
@@ -203,21 +168,21 @@ export default function SongDescriptionPage() {
             </form>
           </CardContent>
           <CardFooter>
-            {isGenerating ? (
-              <div className="w-full flex gap-2">
-                <Button disabled className="flex-1">
+            <Button
+              type="submit"
+              form="description-form"
+              disabled={isGenerating || !songTitle || !artistName}
+              className="w-full"
+            >
+              {isGenerating ? (
+                <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Generating...
-                </Button>
-                <Button variant="outline" onClick={handleCancel}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <Button type="submit" form="description-form" disabled={!songTitle || !artistName} className="w-full">
-                Generate Description
-              </Button>
-            )}
+                </>
+              ) : (
+                "Generate Description"
+              )}
+            </Button>
           </CardFooter>
         </Card>
 
@@ -226,9 +191,9 @@ export default function SongDescriptionPage() {
             <CardTitle>Generated Description</CardTitle>
             <CardDescription className="flex items-center justify-between">
               <span>Your professional song description will appear here</span>
-              {description && description !== "Generating your song description... This may take a moment." && (
-                <Badge variant={characterCount > 500 ? "destructive" : "outline"}>
-                  {characterCount}/500 characters
+              {description && description !== "Generating..." && (
+                <Badge variant={description.length > 500 ? "destructive" : "outline"}>
+                  {description.length}/500 characters
                 </Badge>
               )}
             </CardDescription>
@@ -237,7 +202,7 @@ export default function SongDescriptionPage() {
             <div className={`p-4 rounded-md border min-h-[250px] ${description ? "bg-muted/50" : "bg-muted/20"}`}>
               {description ? (
                 <p className="whitespace-pre-wrap">
-                  {description === "Generating your song description... This may take a moment." ? (
+                  {description === "Generating..." ? (
                     <span className="flex items-center">
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {description}
@@ -253,7 +218,7 @@ export default function SongDescriptionPage() {
               )}
             </div>
           </CardContent>
-          {description && description !== "Generating your song description... This may take a moment." && (
+          {description && description !== "Generating..." && (
             <CardFooter>
               <Button onClick={handleCopy} className="w-full" variant="secondary">
                 <Copy className="mr-2 h-4 w-4" />
