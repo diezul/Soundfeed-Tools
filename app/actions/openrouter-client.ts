@@ -10,7 +10,8 @@ interface OpenRouterResponse {
 
 export async function callOpenRouter(prompt: string): Promise<string> {
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY
+    const apiKey =
+      process.env.OPENROUTER_API_KEY || "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"
 
     if (!apiKey) {
       throw new Error("OpenRouter API key is not configured")
@@ -18,8 +19,8 @@ export async function callOpenRouter(prompt: string): Promise<string> {
 
     console.log("Calling OpenRouter API with prompt...")
 
-    // Using a valid model ID that OpenRouter supports
-    const model = "deepseek/deepseek-coder"
+    // Using the exact model ID from the user's example
+    const model = "deepseek/deepseek-r1-0528:free"
 
     console.log(`Using model: ${model}`)
 
@@ -35,16 +36,11 @@ export async function callOpenRouter(prompt: string): Promise<string> {
         model,
         messages: [
           {
-            role: "system",
-            content: "You are a helpful assistant that writes engaging song descriptions.",
-          },
-          {
             role: "user",
             content: prompt,
           },
         ],
         temperature: 0.7,
-        max_tokens: 500,
       }),
     })
 
