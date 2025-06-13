@@ -2,90 +2,250 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { Sparkles, Copy, Loader2 } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Sparkles, SendHorizontal, Copy, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
-import { generateDescription } from "../actions/generate-description"
+import { cn } from "@/lib/utils"
+import { generateAIResponse } from "../lib/ai-client"
+
+// Define message types
+type MessageRole = "system" | "user" | "assistant" | "info"
+
+interface Message {
+  id: string
+  role: MessageRole
+  content: string
+  timestamp: Date
+}
+
+// Define the steps in our conversation
+type Step = "welcome" | "title" | "artist" | "genre" | "mood" | "additional" | "generating" | "complete"
 
 export default function SongDescriptionPage() {
-  const [songTitle, setSongTitle] = useState("")
-  const [artistName, setArtistName] = useState("")
-  const [genre, setGenre] = useState("")
-  const [mood, setMood] = useState("")
-  const [additionalInfo, setAdditionalInfo] = useState("")
-  const [description, setDescription] = useState("")
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [error, setError] = useState("")
+  // State for the chat interface
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [currentStep, setCurrentStep] = useState<Step>("welcome")
+  const [songInfo, setSongInfo] = useState({
+    title: "",
+    artist: "",
+    genre: "",
+    mood: "",
+    additional: "",
+  })
+  const [finalDescription, setFinalDescription] = useState("")
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Initialize the chat with welcome message
+  useEffect(() => {
+    const initialMessage: Message = {
+      id: "welcome",
+      role: "assistant",
+      content:
+        "👋 Hi! I'll help you create a professional song description. Let's start with the song title. What's the name of your song?",
+      timestamp: new Date(),
+    }
+    setMessages([initialMessage])
+    setCurrentStep("title")
+  }, [])
 
-    if (!songTitle || !artistName) {
-      toast({
-        title: "Missing information",
-        description: "Please provide at least the song title and artist name.",
-        variant: "destructive",
-      })
-      return
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Focus input when available
+  useEffect(() => {
+    if (!isProcessing && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isProcessing, currentStep])
+
+  // Handle sending a message
+  const handleSendMessage = async () => {
+    if (!input.trim() || isProcessing) return
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: input.trim(),
+      timestamp: new Date(),
     }
 
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsProcessing(true)
+
     try {
-      setIsGenerating(true)
-      setError("")
-      setDescription("Generating...")
+      // Process the user's input based on the current step
+      switch (currentStep) {
+        case "title":
+          setSongInfo((prev) => ({ ...prev, title: input.trim() }))
+          addAssistantMessage("Great! Now, who's the artist?")
+          setCurrentStep("artist")
+          break
 
-      const result = await generateDescription(songTitle, artistName, genre, mood, additionalInfo)
+        case "artist":
+          setSongInfo((prev) => ({ ...prev, artist: input.trim() }))
+          addAssistantMessage("What genre would you categorize this song as? (e.g., Pop, Hip-Hop, Rock)")
+          setCurrentStep("genre")
+          break
 
-      if (result.success && result.description) {
-        setDescription(result.description)
-        toast({
-          title: "Success!",
-          description: "Description generated successfully.",
-        })
-      } else {
-        setDescription("")
-        setError(result.error || "Failed to generate description")
-        toast({
-          title: "Error",
-          description: result.error || "Failed to generate description",
-          variant: "destructive",
-        })
+        case "genre":
+          setSongInfo((prev) => ({ ...prev, genre: input.trim() }))
+          addAssistantMessage("How would you describe the mood of the song? (e.g., Energetic, Melancholic, Uplifting)")
+          setCurrentStep("mood")
+          break
+
+        case "mood":
+          setSongInfo((prev) => ({ ...prev, mood: input.trim() }))
+          addAssistantMessage(
+            "Any additional information about the song you'd like to include? (influences, specific elements to highlight, etc.)",
+          )
+          setCurrentStep("additional")
+          break
+
+        case "additional":
+          setSongInfo((prev) => ({ ...prev, additional: input.trim() }))
+          await generateDescription()
+          break
       }
-    } catch (err) {
-      setDescription("")
-      const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred"
-      setError(errorMessage)
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      })
+    } catch (error) {
+      console.error("Error processing message:", error)
+      addSystemMessage("Sorry, I encountered an error. Please try again.")
     } finally {
-      setIsGenerating(false)
+      setIsProcessing(false)
     }
   }
 
+  // Generate the final description
+  const generateDescription = async () => {
+    setCurrentStep("generating")
+    addSystemMessage("Generating your song description...")
+
+    try {
+      // Create the conversation for the AI
+      const aiMessages = [
+        {
+          role: "system",
+          content: `You are a professional music copywriter who creates engaging song descriptions. 
+          Create a captivating song description that is EXACTLY between 490-500 characters.
+          Do not include any explanations, notes, or character counts in your response.
+          Just provide the description text directly.`,
+        },
+        {
+          role: "user",
+          content: `Write a professional song description for "${songInfo.title}" by ${songInfo.artist}.
+          Genre: ${songInfo.genre || "Not specified"}
+          Mood: ${songInfo.mood || "Not specified"}
+          Additional information: ${songInfo.additional || "None provided"}`,
+        },
+      ]
+
+      // Call the AI API
+      const description = await generateAIResponse(aiMessages)
+
+      // Ensure the description is within character limits
+      let finalDesc = description
+      if (finalDesc.length > 500) {
+        const lastPeriodIndex = finalDesc.lastIndexOf(".", 500)
+        if (lastPeriodIndex > 450) {
+          finalDesc = finalDesc.substring(0, lastPeriodIndex + 1)
+        } else {
+          finalDesc = finalDesc.substring(0, 497) + "..."
+        }
+      }
+
+      setFinalDescription(finalDesc)
+      addAssistantMessage("Here's your song description:")
+      addAssistantMessage(finalDesc)
+      setCurrentStep("complete")
+    } catch (error) {
+      console.error("Error generating description:", error)
+      addSystemMessage(
+        "I'm having trouble connecting to the AI service. Please check your API configuration or try again later.",
+      )
+      setCurrentStep("additional") // Go back to allow retry
+    }
+  }
+
+  // Helper to add assistant messages
+  const addAssistantMessage = (content: string) => {
+    const message: Message = {
+      id: `assistant-${Date.now()}`,
+      role: "assistant",
+      content,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, message])
+  }
+
+  // Helper to add system messages
+  const addSystemMessage = (content: string) => {
+    const message: Message = {
+      id: `system-${Date.now()}`,
+      role: "info",
+      content,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, message])
+  }
+
+  // Handle copying the description
   const handleCopy = () => {
-    navigator.clipboard.writeText(description)
+    navigator.clipboard.writeText(finalDescription)
     toast({
       title: "Copied!",
       description: "Description copied to clipboard.",
     })
   }
 
+  // Handle starting over
+  const handleReset = () => {
+    setMessages([
+      {
+        id: "welcome-reset",
+        role: "assistant",
+        content: "👋 Let's create a new song description. What's the name of your song?",
+        timestamp: new Date(),
+      },
+    ])
+    setSongInfo({
+      title: "",
+      artist: "",
+      genre: "",
+      mood: "",
+      additional: "",
+    })
+    setFinalDescription("")
+    setCurrentStep("title")
+    setInput("")
+  }
+
+  // Handle key press for sending messages
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey && !isProcessing) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
   return (
-    <div className="container max-w-5xl py-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container max-w-4xl py-6">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Song Description Generator</h1>
-          <p className="text-muted-foreground">Generate professional song descriptions powered by AI</p>
+          <p className="text-muted-foreground">Create professional song descriptions with AI assistance</p>
         </div>
         <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500/30">
           <Sparkles className="h-3 w-3 mr-1" />
@@ -93,141 +253,100 @@ export default function SongDescriptionPage() {
         </Badge>
       </div>
 
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-md p-4 text-red-500">
-          <p className="font-medium">Error:</p>
-          <p className="mt-1">{error}</p>
-        </div>
-      )}
+      <Card className="border-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center">
+            <Avatar className="h-8 w-8 mr-2">
+              <AvatarImage src="/placeholder-logo.svg" alt="AI" />
+              <AvatarFallback>AI</AvatarFallback>
+            </Avatar>
+            Description Assistant
+          </CardTitle>
+        </CardHeader>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Song Information</CardTitle>
-            <CardDescription>Fill in the details about your song to generate a description.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form id="description-form" onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="song-title">Song Title *</Label>
-                <Input
-                  id="song-title"
-                  value={songTitle}
-                  onChange={(e) => setSongTitle(e.target.value)}
-                  placeholder="Enter song title"
-                  disabled={isGenerating}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="artist-name">Artist Name *</Label>
-                <Input
-                  id="artist-name"
-                  value={artistName}
-                  onChange={(e) => setArtistName(e.target.value)}
-                  placeholder="Enter artist name"
-                  disabled={isGenerating}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="genre">Genre</Label>
-                <Input
-                  id="genre"
-                  value={genre}
-                  onChange={(e) => setGenre(e.target.value)}
-                  placeholder="e.g., Pop, Hip-Hop, Rock"
-                  disabled={isGenerating}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="mood">Mood</Label>
-                <Input
-                  id="mood"
-                  value={mood}
-                  onChange={(e) => setMood(e.target.value)}
-                  placeholder="e.g., Energetic, Melancholic, Uplifting"
-                  disabled={isGenerating}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="additional-info">Additional Information</Label>
-                <Textarea
-                  id="additional-info"
-                  value={additionalInfo}
-                  onChange={(e) => setAdditionalInfo(e.target.value)}
-                  placeholder="Any other details about the song, influences, or specific elements to highlight"
-                  disabled={isGenerating}
-                  className="min-h-[100px]"
-                />
-              </div>
-            </form>
-          </CardContent>
-          <CardFooter>
-            <Button
-              type="submit"
-              form="description-form"
-              disabled={isGenerating || !songTitle || !artistName}
-              className="w-full"
-            >
-              {isGenerating ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                "Generate Description"
-              )}
-            </Button>
-          </CardFooter>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Generated Description</CardTitle>
-            <CardDescription className="flex items-center justify-between">
-              <span>Your professional song description will appear here</span>
-              {description && description !== "Generating..." && (
-                <Badge variant={description.length > 500 ? "destructive" : "outline"}>
-                  {description.length}/500 characters
-                </Badge>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className={`p-4 rounded-md border min-h-[250px] ${description ? "bg-muted/50" : "bg-muted/20"}`}>
-              {description ? (
-                <p className="whitespace-pre-wrap">
-                  {description === "Generating..." ? (
-                    <span className="flex items-center">
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      {description}
-                    </span>
-                  ) : (
-                    description
+        <CardContent>
+          <ScrollArea className="h-[400px] pr-4">
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <div key={message.id} className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}>
+                  {message.role === "assistant" && (
+                    <Avatar className="h-8 w-8 mr-2">
+                      <AvatarImage src="/placeholder-logo.svg" alt="AI" />
+                      <AvatarFallback>AI</AvatarFallback>
+                    </Avatar>
                   )}
-                </p>
-              ) : (
-                <p className="text-muted-foreground text-center italic mt-12">
-                  Fill in the form and click "Generate Description" to create your song description
-                </p>
-              )}
+
+                  <div
+                    className={cn(
+                      "rounded-lg px-4 py-2 max-w-[80%]",
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : message.role === "assistant"
+                          ? "bg-muted"
+                          : "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+                    )}
+                  >
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                  </div>
+
+                  {message.role === "user" && (
+                    <Avatar className="h-8 w-8 ml-2">
+                      <AvatarImage src="/placeholder-user.jpg" alt="User" />
+                      <AvatarFallback>You</AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
+              ))}
+              <div ref={messagesEndRef} />
             </div>
-          </CardContent>
-          {description && description !== "Generating..." && (
-            <CardFooter>
-              <Button onClick={handleCopy} className="w-full" variant="secondary">
-                <Copy className="mr-2 h-4 w-4" />
-                Copy to Clipboard
-              </Button>
-            </CardFooter>
+          </ScrollArea>
+        </CardContent>
+
+        <CardFooter className="flex flex-col gap-4">
+          <div className="flex w-full items-center space-x-2">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder={
+                isProcessing
+                  ? "Please wait..."
+                  : currentStep === "complete"
+                    ? "Start over to create a new description"
+                    : "Type your message..."
+              }
+              disabled={isProcessing || currentStep === "complete"}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={isProcessing || !input.trim() || currentStep === "complete"}
+              size="icon"
+            >
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          {currentStep === "complete" && finalDescription && (
+            <div className="w-full space-y-4">
+              <div className="flex justify-between items-center">
+                <Badge variant="outline">{finalDescription.length} characters</Badge>
+                <div className="space-x-2">
+                  <Button onClick={handleCopy} size="sm" variant="secondary">
+                    <Copy className="h-4 w-4 mr-1" />
+                    Copy
+                  </Button>
+                  <Button onClick={handleReset} size="sm" variant="outline">
+                    <RefreshCw className="h-4 w-4 mr-1" />
+                    New Description
+                  </Button>
+                </div>
+              </div>
+            </div>
           )}
-        </Card>
-      </div>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

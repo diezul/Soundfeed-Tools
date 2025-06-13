@@ -67,6 +67,7 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
         text: "Soundfeed A.I.",
         variant: "purple",
       },
+      highlight: true, // Add highlight property for special styling
     },
   ]
 
@@ -87,7 +88,12 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild isActive={pathname === item.href} tooltip={item.title}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                tooltip={item.title}
+                className={item.highlight ? "relative" : ""}
+              >
                 <Link href={item.href} className="flex items-center w-full">
                   <item.icon className="shrink-0" />
                   <span className="flex items-center truncate">
@@ -103,6 +109,12 @@ export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean 
                       </Badge>
                     )}
                   </span>
+                  {item.highlight && isMobileSheet && (
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
+                    </span>
+                  )}
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
