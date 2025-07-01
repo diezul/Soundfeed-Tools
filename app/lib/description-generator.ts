@@ -16,6 +16,9 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
     throw new Error("OpenRouter API key is not configured")
   }
 
+  console.log("🔑 API Key Status:", API_KEY ? "Present" : "Missing")
+  console.log("🌐 Making request to OpenRouter API...")
+
   const body: any = {
     model: "deepseek/deepseek-r1-0528:free",
     messages,
@@ -26,6 +29,8 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
   if (jsonMode) {
     body.response_format = { type: "json_object" }
   }
+
+  console.log("📤 Request body:", JSON.stringify(body, null, 2))
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -38,6 +43,8 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
     body: JSON.stringify(body),
   })
 
+  console.log("📥 Response status:", response.status)
+
   if (!response.ok) {
     const errorText = await response.text()
     console.error(`API Error (${response.status}): ${errorText}`)
@@ -45,6 +52,8 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
   }
 
   const data = (await response.json()) as OpenRouterResponse
+  console.log("✅ API Response received, content length:", data.choices[0].message.content.length)
+
   return data.choices[0].message.content.trim()
 }
 
@@ -80,6 +89,8 @@ function extractAndParseJson(text: string): any | null {
 
 // STEP 1: The Music Journalist - Interprets and synthesizes raw info
 async function synthesizeInfo(rawInfo: any) {
+  console.log("🎵 STEP 1: Starting synthesis with raw info:", rawInfo)
+
   const synthesisPrompt = `
     You are a senior music journalist and A&R storyteller. Your task is to analyze the following raw data about a new song and extract the core narrative, key themes, and marketing angles.
 
@@ -104,18 +115,23 @@ async function synthesizeInfo(rawInfo: any) {
   const messages = [{ role: "user", content: synthesisPrompt }]
   const responseText = await callOpenRouter(messages, 500, 0.5, true) // Force JSON mode
 
+  console.log("📊 Raw synthesis response:", responseText)
+
   const parsedJson = extractAndParseJson(responseText)
 
   if (parsedJson) {
+    console.log("✅ Successfully parsed synthesis JSON:", parsedJson)
     return parsedJson
   } else {
-    console.error("Failed to parse synthesis JSON after all attempts. Raw response:", responseText)
+    console.error("❌ Failed to parse synthesis JSON after all attempts. Raw response:", responseText)
     throw new Error("The AI failed to synthesize the song's story. Please try again.")
   }
 }
 
 // STEP 2: The Elite Copywriter - Writes the final description from synthesized info
 async function writeFinalDescription(synthesis: any, previousAttempt?: { text: string; length: number }) {
+  console.log("✍️ STEP 2: Writing final description with synthesis:", synthesis)
+
   let copywritingPrompt = `
     You are an elite copywriter for Spotify's editorial team. Using the following structured analysis from a music journalist, write a compelling, unique, and professional 490-500 character song description.
 
@@ -140,7 +156,12 @@ async function writeFinalDescription(synthesis: any, previousAttempt?: { text: s
   }
 
   const messages = [{ role: "user", content: copywritingPrompt }]
-  return await callOpenRouter(messages, 250, 0.85)
+  const result = await callOpenRouter(messages, 250, 0.85)
+
+  console.log("📝 Final description generated:", result)
+  console.log("📏 Character count:", result.length)
+
+  return result
 }
 
 // Main orchestrator function
@@ -148,6 +169,9 @@ export async function generateIntelligentDescription(
   rawInfo: any,
 ): Promise<{ success: boolean; description?: string; error?: string }> {
   try {
+    console.log("🚀 Starting intelligent description generation...")
+    console.log("📋 Input data:", rawInfo)
+
     console.log("Step 1: Synthesizing song information...")
     const synthesis = await synthesizeInfo(rawInfo)
     console.log("Synthesized Info:", synthesis)
@@ -177,9 +201,10 @@ export async function generateIntelligentDescription(
       }
     }
 
+    console.log("🎉 Final result:", { success: true, description: finalDescription })
     return { success: true, description: finalDescription }
   } catch (error) {
-    console.error("Error in generateIntelligentDescription:", error)
+    console.error("💥 Error in generateIntelligentDescription:", error)
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred."
     return { success: false, error: errorMessage }
   }
