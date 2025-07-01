@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Progress } from "@/components/ui/progress"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { generateAIResponse } from "../lib/ai-client"
+import { generateIntelligentDescription } from "../lib/description-generator"
 
 // Define message types
 type MessageRole = "system" | "user" | "assistant" | "info" | "error" | "selection"
@@ -37,6 +37,7 @@ type Step =
   | "featuring_question"
   | "featuring_artists"
   | "genre"
+  | "language"
   | "mood"
   | "inspiration"
   | "previous_releases_question"
@@ -59,6 +60,7 @@ export default function SongDescriptionPage() {
     has_featuring: "", // "yes", "no"
     featuring_artists: "",
     genre: "",
+    language: "",
     mood: "",
     inspiration: "",
     has_previous_releases: "", // "yes", "no"
@@ -67,7 +69,6 @@ export default function SongDescriptionPage() {
   })
   const [finalDescription, setFinalDescription] = useState("")
   const [characterCount, setCharacterCount] = useState(0)
-  const [retryCount, setRetryCount] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -226,6 +227,12 @@ export default function SongDescriptionPage() {
 
         case "genre":
           setSongInfo((prev) => ({ ...prev, genre: input.trim() }))
+          addAssistantMessage("What language are the lyrics in? (e.g., English, Romanian, Spanish, etc.)")
+          setCurrentStep("language")
+          break
+
+        case "language":
+          setSongInfo((prev) => ({ ...prev, language: input.trim() }))
           addAssistantMessage(
             "How would you describe the mood or emotional tone of the song? (e.g., Energetic, Melancholic, Uplifting, Sad)",
           )
@@ -254,7 +261,7 @@ export default function SongDescriptionPage() {
 
         case "additional_info":
           setSongInfo((prev) => ({ ...prev, additional_info: input.trim() }))
-          addSystemMessage("Thanks for providing all this information! Generating your description now...")
+          addSystemMessage("Analyzing your responses and crafting a unique description...")
           await generateDescription()
           break
       }
@@ -266,104 +273,32 @@ export default function SongDescriptionPage() {
     }
   }
 
-  // Generate the final description
+  // Generate the final description using the new intelligent system
   const generateDescription = async () => {
     setCurrentStep("generating")
-    setRetryCount(0)
 
-    try {
-      // Determine the actual song title
-      const actualSongTitle = songInfo.song_title || songInfo.release_title
+    const rawInfo = {
+      song_title: songInfo.song_title || songInfo.release_title,
+      artist_name: songInfo.artist_name,
+      genre: songInfo.genre,
+      mood: songInfo.mood,
+      inspiration: songInfo.inspiration,
+      previous_releases_details: songInfo.previous_releases_details,
+      additional_info: songInfo.additional_info,
+    }
 
-      // Build featuring text
-      const featuringText =
-        songInfo.has_featuring === "yes" && songInfo.featuring_artists ? ` featuring ${songInfo.featuring_artists}` : ""
+    const result = await generateIntelligentDescription(rawInfo)
 
-      // Create the conversation for the AI
-      const aiMessages = [
-        {
-          role: "system",
-          content: `You are a professional music copywriter who creates engaging song descriptions.
-
-          CRITICAL REQUIREMENTS:
-          - Your response must be EXACTLY between 490-500 characters (count carefully!)
-          - Write complete sentences that end naturally - NO abrupt cutoffs
-          - Do NOT use ellipses (...) anywhere in your response
-          - Include ALL the provided information in your description
-          - End with proper punctuation (period, exclamation mark, or question mark)
-          - Count your characters before responding to ensure you're in the 490-500 range
-          
-          If your first draft is too short, add more descriptive details.
-          If your first draft is too long, trim carefully while keeping all key information.
-          
-          REMEMBER: The description must feel complete and professional, not cut off mid-sentence.`,
-        },
-        {
-          role: "user",
-          content: `Write a professional song description using ALL of the following information:
-
-          Release Title: "${songInfo.release_title}"
-          Release Type: ${songInfo.release_type}
-          Song Title: "${actualSongTitle}"${featuringText}
-          Artist: ${songInfo.artist_name}
-          Genre: ${songInfo.genre}
-          Mood: ${songInfo.mood}
-          Inspiration: ${songInfo.inspiration}
-          ${songInfo.has_previous_releases === "yes" ? `Previous Notable Release: ${songInfo.previous_releases_details}` : "This artist doesn't have notable previous releases"}
-          Additional Information: ${songInfo.additional_info}
-          
-          MANDATORY REQUIREMENTS:
-          - Use ALL the information provided above
-          - Mention the release type (${songInfo.release_type})
-          - Include the song title "${actualSongTitle}"
-          - Reference the artist ${songInfo.artist_name}
-          ${songInfo.has_featuring === "yes" ? `- Mention the featuring artists: ${songInfo.featuring_artists}` : ""}
-          - Incorporate the genre (${songInfo.genre}) and mood (${songInfo.mood})
-          - Reference the inspiration: ${songInfo.inspiration}
-          ${songInfo.has_previous_releases === "yes" ? `- Reference their previous work: ${songInfo.previous_releases_details}` : ""}
-          - Include the additional details: ${songInfo.additional_info}
-          
-          FINAL CHECK: Your description MUST be 490-500 characters with a natural, complete ending.`,
-        },
-      ]
-
-      // Call the AI API
-      const description = await generateAIResponse(aiMessages)
-
-      // Validate the description
-      if (!description || description.length < 490) {
-        throw new Error(`Description too short: ${description?.length || 0} characters`)
-      }
-
-      if (description.length > 500) {
-        throw new Error(`Description too long: ${description.length} characters`)
-      }
-
-      setFinalDescription(description)
-      setCharacterCount(description.length)
-
-      addAssistantMessage("Here's your song description:")
-      addAssistantMessage(description)
-
-      // Add character count message
-      addSystemMessage(`Character count: ${description.length}/500 ✓`)
-
+    if (result.success && result.description) {
+      setFinalDescription(result.description)
+      setCharacterCount(result.description.length)
+      addAssistantMessage("Here is your unique, AI-crafted description:")
+      addAssistantMessage(result.description)
+      addSystemMessage(`Character count: ${result.description.length}/500 ✓`)
       setCurrentStep("complete")
-    } catch (error) {
-      console.error("Error generating description:", error)
-
-      // If we've already retried 3 times, show an error
-      if (retryCount >= 2) {
-        addErrorMessage(
-          "I'm having trouble generating a description with the perfect length. Please try again with different information.",
-        )
-        setCurrentStep("additional_info") // Go back to allow retry
-      } else {
-        // Otherwise, retry
-        setRetryCount((prev) => prev + 1)
-        addSystemMessage("Adjusting the description length, trying again...")
-        setTimeout(() => generateDescription(), 1000)
-      }
+    } else {
+      addErrorMessage(result.error || "Failed to generate a description. Please try again with different details.")
+      setCurrentStep("additional_info") // Allow user to retry
     }
   }
 
@@ -440,6 +375,7 @@ export default function SongDescriptionPage() {
       has_featuring: "",
       featuring_artists: "",
       genre: "",
+      language: "",
       mood: "",
       inspiration: "",
       has_previous_releases: "",
@@ -450,7 +386,6 @@ export default function SongDescriptionPage() {
     setCharacterCount(0)
     setCurrentStep("release_title")
     setInput("")
-    setRetryCount(0)
   }
 
   // Handle key press for sending messages
@@ -463,10 +398,8 @@ export default function SongDescriptionPage() {
 
   // Get badge color based on character count
   const getBadgeVariant = () => {
-    if (characterCount > 500) return "destructive"
-    if (characterCount < 490) return "destructive"
-    if (characterCount > 495) return "default"
-    return "outline"
+    if (characterCount > 500 || characterCount < 490) return "destructive"
+    return "default"
   }
 
   // Calculate progress percentage for character count
