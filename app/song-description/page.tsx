@@ -278,11 +278,17 @@ export default function SongDescriptionPage() {
     setCurrentStep("generating")
 
     const rawInfo = {
+      release_title: songInfo.release_title,
+      release_type: songInfo.release_type,
       song_title: songInfo.song_title || songInfo.release_title,
       artist_name: songInfo.artist_name,
+      has_featuring: songInfo.has_featuring,
+      featuring_artists: songInfo.featuring_artists,
       genre: songInfo.genre,
+      language: songInfo.language,
       mood: songInfo.mood,
       inspiration: songInfo.inspiration,
+      has_previous_releases: songInfo.has_previous_releases,
       previous_releases_details: songInfo.previous_releases_details,
       additional_info: songInfo.additional_info,
     }
