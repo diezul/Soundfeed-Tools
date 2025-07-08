@@ -210,7 +210,7 @@ export default function SongDescriptionPage() {
           setCurrentStep("previous_releases_details")
         } else {
           await addMessageWithTyping(
-            "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, etc.)",
+            "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, production details, etc.)",
           )
           setCurrentStep("additional_info")
         }
@@ -305,7 +305,7 @@ export default function SongDescriptionPage() {
         case "previous_releases_details":
           setSongInfo((prev) => ({ ...prev, previous_releases_details: currentInput }))
           await addMessageWithTyping(
-            "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, etc.)",
+            "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, production details, etc.)",
           )
           setCurrentStep("additional_info")
           break

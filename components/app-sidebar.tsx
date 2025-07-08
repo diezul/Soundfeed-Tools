@@ -1,128 +1,79 @@
 "use client"
 
-import { Home, Youtube, Clock, Music, Activity, ImageIcon, Hash, Users, Sparkles } from "lucide-react"
-import NextImage from "next/image"
-import Link from "next/link"
+import { Home, Music, Search, Download, Clock, Link2, Youtube, Fingerprint, Settings, LifeBuoy } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuButton,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
 } from "@/components/ui/sidebar"
-import { usePathname } from "next/navigation"
-import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
 
-export function AppSidebar({ isMobileSheet = false }: { isMobileSheet?: boolean }) {
-  const pathname = usePathname()
+const mainNav = [
+  { title: "Home", href: "/", icon: Home },
+  { title: "Song Description", href: "/song-description", icon: Music },
+  { title: "Artist Finder", href: "/artist-finder", icon: Search },
+  { title: "Artwork Downloader", href: "/artwork-downloader", icon: Download },
+  { title: "BPM Tapper", href: "/bpm-tapper", icon: Clock },
+  { title: "Link to Stream", href: "/link-to-stream", icon: Link2 },
+  { title: "Channel ID Finder", href: "/channel-id-finder", icon: Youtube },
+  { title: "ISRC/UPC Finder", href: "/isrc-upc-finder", icon: Fingerprint },
+]
 
-  const menuItems = [
-    {
-      title: "Home",
-      icon: Home,
-      href: "/",
-    },
-    {
-      title: "Channel ID Finder",
-      icon: Youtube,
-      href: "/channel-id-finder",
-    },
-    {
-      title: "Time to Seconds",
-      icon: Clock,
-      href: "/time-to-seconds",
-    },
-    {
-      title: "Link2Stream",
-      icon: Music,
-      href: "/link-to-stream",
-    },
-    {
-      title: "BPM Tapper",
-      icon: Activity,
-      href: "/bpm-tapper",
-    },
-    {
-      title: "Artwork Downloader",
-      icon: ImageIcon,
-      href: "/artwork-downloader",
-    },
-    {
-      title: "ISRC & UPC Finder",
-      icon: Hash,
-      href: "/isrc-upc-finder",
-    },
-    {
-      title: "Artist Finder",
-      icon: Users,
-      href: "/artist-finder",
-    },
-    {
-      title: "Song Description",
-      icon: Sparkles,
-      href: "/song-description",
-      badge: {
-        text: "Soundfeed A.I.",
-        variant: "purple",
-      },
-      highlight: true,
-    },
-  ]
+const secondaryNav = [
+  { title: "Settings", href: "/settings", icon: Settings },
+  { title: "Support", href: "/support", icon: LifeBuoy },
+]
 
+export function AppSidebar() {
   return (
-    <Sidebar variant="floating" collapsible="icon" className={isMobileSheet ? "border-none shadow-none" : ""}>
-      <SidebarHeader className="flex items-center justify-center py-4">
-        <div className="flex items-center justify-center">
-          <NextImage
-            src="https://i.imgur.com/rvzkLlQ.png"
-            alt="Soundfeed Logo"
-            width={150}
-            height={50}
-            className="h-auto"
-          />
+    <Sidebar>
+      <SidebarHeader>
+        <div className="flex items-center gap-2 p-2">
+          <Music className="h-6 w-6 text-primary" />
+          <h1 className="text-lg font-semibold">Soundfeed Tools</h1>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+      <SidebarContent className="p-2">
+        <SidebarGroup>
+          <SidebarGroupLabel>Tools</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {mainNav.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
+                    <Link href={item.href}>
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter className="p-2">
+        <Separator className="my-2" />
         <SidebarMenu>
-          {menuItems.map((item) => (
+          {secondaryNav.map((item) => (
             <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === item.href}
-                tooltip={item.title}
-                className={item.highlight ? "relative" : ""}
-              >
-                <Link href={item.href} className="flex items-center w-full">
-                  <item.icon className="shrink-0" />
-                  <span className="flex items-center truncate">
-                    {item.title}
-                    {item.badge && (
-                      <Badge
-                        variant="outline"
-                        className={`ml-2 text-[0.6rem] py-0 px-1 inline-flex items-center whitespace-nowrap
-                          ${item.badge.variant === "purple" ? "bg-purple-500/20 text-purple-300 border-purple-500/30" : ""}`}
-                      >
-                        <Sparkles className="h-2 w-2 mr-1" />
-                        {item.badge.text}
-                      </Badge>
-                    )}
-                  </span>
-                  {item.highlight && !isMobileSheet && (
-                    <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-purple-500"></span>
-                    </span>
-                  )}
+              <SidebarMenuButton asChild>
+                <Link href={item.href}>
+                  <item.icon className="h-4 w-4" />
+                  <span>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
-      </SidebarContent>
-      <SidebarFooter className="p-4 text-center text-xs text-gray-400">
-        Soundfeed Tools © {new Date().getFullYear()}
       </SidebarFooter>
     </Sidebar>
   )
