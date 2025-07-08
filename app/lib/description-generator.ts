@@ -20,7 +20,7 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
   console.log("🌐 Making request to OpenRouter API...")
 
   const body: any = {
-    model: "tngtech/deepseek-r1t2-chimera:free",
+    model: "openrouter/cypher-alpha:free",
     messages,
     max_tokens,
     temperature,
@@ -129,16 +129,26 @@ async function synthesizeInfo(rawInfo: any) {
 }
 
 // STEP 2: The Elite Copywriter - Writes the final description from synthesized info
-async function writeFinalDescription(synthesis: any, previousAttempt?: { text: string; length: number }) {
+async function writeFinalDescription(synthesis: any, rawInfo: any, previousAttempt?: { text: string; length: number }) {
   console.log("✍️ STEP 2: Writing final description with synthesis:", synthesis)
 
+  // Determine the actual song title and artist
+  const songTitle = rawInfo.song_title || rawInfo.release_title
+  const artistName = rawInfo.artist_name
+  const featuringText =
+    rawInfo.has_featuring === "yes" && rawInfo.featuring_artists ? ` featuring ${rawInfo.featuring_artists}` : ""
+
   let copywritingPrompt = `
-    You are an elite copywriter for Spotify's editorial team. Using the following structured analysis from a music journalist, write a compelling, unique, and professional 490-500 character song description.
+    You are an elite copywriter for Spotify's editorial team. Using the following structured analysis from a music journalist, write a compelling, unique, and professional song description.
 
     CRITICAL RULES:
-    - The description MUST be between 490-500 characters. This is non-negotiable.
+    - The description MUST be between 450-499 characters.
+    - You MUST include the song title "${songTitle}" by ${artistName}${featuringText} at least once in the description.
     - Write in a sophisticated, engaging, and professional tone.
-    - Do NOT use the raw data; only use the provided analysis to craft your narrative.
+    - The description MUST end with a complete sentence and proper punctuation (period, exclamation, or question mark).
+    - NEVER end with incomplete phrases like "Perfect for" or "Ideal for" without completing the thought.
+    - If you mention playlists, complete the sentence properly: "Perfect for heartbreak playlists and emotional listening sessions."
+    - Do NOT cut off mid-sentence or mid-word.
 
     Journalist's Analysis:
     - Primary Theme: "${synthesis.primaryTheme}"
@@ -148,20 +158,66 @@ async function writeFinalDescription(synthesis: any, previousAttempt?: { text: s
     - Mood & Genre: "${synthesis.moodAndGenre}"
     - Playlist Keywords: "${synthesis.playlistKeywords}"
 
-    Your task is to weave these elements into a seamless, powerful story.
+    Structure your description like this:
+    1. Start with the song title and artist
+    2. Describe the musical style and themes
+    3. Add context about the artist's journey or previous work
+    4. End with a complete statement about impact, playlists, or significance
+
+    Your task is to weave these elements into a seamless, powerful story that feels personal to this specific song.
   `
 
   if (previousAttempt) {
-    copywritingPrompt += `\n\nIMPORTANT FEEDBACK: Your last attempt was ${previousAttempt.length} characters. This was the wrong length. You MUST write a description between 490-500 characters. Adjust your writing by elaborating more on the themes and artist's journey to meet the length requirement.`
+    copywritingPrompt += `\n\nIMPORTANT FEEDBACK: Your last attempt was ${previousAttempt.length} characters and may have ended abruptly. Remember: 450-499 characters with COMPLETE sentences and proper ending. No incomplete "Perfect for" phrases.`
   }
 
   const messages = [{ role: "user", content: copywritingPrompt }]
-  const result = await callOpenRouter(messages, 250, 0.85)
+  const result = await callOpenRouter(messages, 300, 0.85)
 
   console.log("📝 Final description generated:", result)
   console.log("📏 Character count:", result.length)
 
   return result
+}
+
+// Enhanced function to ensure proper ending
+function ensureProperEnding(text: string): string {
+  // Remove any trailing incomplete phrases
+  const problematicEndings = [
+    /Perfect for\.?$/i,
+    /Ideal for\.?$/i,
+    /Great for\.?$/i,
+    /Suitable for\.?$/i,
+    /A perfect addition to\.?$/i,
+    /Essential for\.?$/i,
+    /Perfect addition to\.?$/i,
+  ]
+
+  let cleanedText = text.trim()
+
+  // Remove problematic endings
+  for (const pattern of problematicEndings) {
+    cleanedText = cleanedText.replace(pattern, "").trim()
+  }
+
+  // If it's too long, trim at word boundary
+  if (cleanedText.length > 499) {
+    let trimmed = cleanedText.substring(0, 496).trim()
+    // Find the last complete word
+    const lastSpace = trimmed.lastIndexOf(" ")
+    if (lastSpace > 400) {
+      // Make sure we don't trim too much
+      trimmed = trimmed.substring(0, lastSpace)
+    }
+    cleanedText = trimmed
+  }
+
+  // Ensure proper ending punctuation
+  if (!cleanedText.endsWith(".") && !cleanedText.endsWith("!") && !cleanedText.endsWith("?")) {
+    cleanedText += "."
+  }
+
+  return cleanedText
 }
 
 // Main orchestrator function
@@ -181,22 +237,29 @@ export async function generateIntelligentDescription(
 
     for (let i = 0; i < 3; i++) {
       console.log(`Step 2: Writing final description (Attempt ${i + 1})`)
-      const description = await writeFinalDescription(synthesis, lastAttempt)
-      console.log(`Attempt ${i + 1} result (${description.length} chars):`, description)
+      const description = await writeFinalDescription(synthesis, rawInfo, lastAttempt)
+      const processedDescription = ensureProperEnding(description)
 
-      if (description.length >= 490 && description.length <= 500) {
-        finalDescription = description
+      console.log(`Attempt ${i + 1} result (${processedDescription.length} chars):`, processedDescription)
+
+      if (processedDescription.length >= 450 && processedDescription.length <= 499) {
+        finalDescription = processedDescription
         break
       } else {
-        lastAttempt = { text: description, length: description.length }
+        lastAttempt = { text: processedDescription, length: processedDescription.length }
         if (i === 2) {
           // If all retries fail, craft a final description manually from synthesis
           console.log("All retries failed. Crafting a robust fallback description.")
-          finalDescription =
-            `${synthesis.uniqueAngle}. The track explores themes of ${synthesis.primaryTheme} and ${synthesis.secondaryTheme}, set against a backdrop of ${synthesis.moodAndGenre}. This release marks a significant point in the artist's journey, reflecting on ${synthesis.artistJourney}. A perfect fit for playlists centered around ${synthesis.playlistKeywords}, this song offers a compelling and deeply resonant listening experience that showcases true artistic vision and masterful execution.`.substring(
-              0,
-              498,
-            ) + "."
+          const songTitle = rawInfo.song_title || rawInfo.release_title
+          const artistName = rawInfo.artist_name
+          const featuringText =
+            rawInfo.has_featuring === "yes" && rawInfo.featuring_artists
+              ? ` featuring ${rawInfo.featuring_artists}`
+              : ""
+
+          finalDescription = `"${songTitle}" by ${artistName}${featuringText} explores themes of ${synthesis.primaryTheme} through ${synthesis.moodAndGenre}. ${synthesis.uniqueAngle}. This release reflects ${synthesis.artistJourney}, showcasing the artist's evolution and creative vision. The track delivers a compelling listening experience that resonates with contemporary audiences and establishes a distinctive artistic voice.`
+
+          finalDescription = ensureProperEnding(finalDescription)
         }
       }
     }

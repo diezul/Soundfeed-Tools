@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
-import { Sparkles, SendHorizontal, Copy, Loader2, RefreshCw, AlertCircle } from "lucide-react"
+import { Sparkles, SendHorizontal, Copy, Loader2, RefreshCw, AlertCircle, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,7 +15,7 @@ import { cn } from "@/lib/utils"
 import { generateIntelligentDescription } from "../lib/description-generator"
 
 // Define message types
-type MessageRole = "system" | "user" | "assistant" | "info" | "error" | "selection"
+type MessageRole = "system" | "user" | "assistant" | "info" | "error" | "selection" | "typing"
 
 interface Message {
   id: string
@@ -51,6 +50,8 @@ export default function SongDescriptionPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [currentStep, setCurrentStep] = useState<Step>("welcome")
   const [songInfo, setSongInfo] = useState({
     release_title: "",
@@ -96,6 +97,8 @@ export default function SongDescriptionPage() {
   useEffect(() => {
     if (
       !isProcessing &&
+      !isTyping &&
+      !isRegenerating &&
       inputRef.current &&
       currentStep !== "release_type" &&
       currentStep !== "featuring_question" &&
@@ -103,10 +106,48 @@ export default function SongDescriptionPage() {
     ) {
       inputRef.current.focus()
     }
-  }, [isProcessing, currentStep])
+  }, [isProcessing, isTyping, isRegenerating, currentStep])
+
+  // Typing effect function
+  const addTypingMessage = () => {
+    const typingMessage: Message = {
+      id: `typing-${Date.now()}`,
+      role: "typing",
+      content: "",
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, typingMessage])
+    setIsTyping(true)
+  }
+
+  const removeTypingMessage = () => {
+    setMessages((prev) => prev.filter((msg) => msg.role !== "typing"))
+    setIsTyping(false)
+  }
+
+  const addMessageWithTyping = async (content: string, role: MessageRole = "assistant", selections?: string[]) => {
+    addTypingMessage()
+
+    // Simulate typing delay
+    await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 1000))
+
+    removeTypingMessage()
+
+    const messageId = `${role}-${Date.now()}`
+    const message: Message = {
+      id: messageId,
+      role,
+      content,
+      timestamp: new Date(),
+      selections,
+    }
+    setMessages((prev) => [...prev, message])
+
+    return messageId
+  }
 
   // Handle selection for multiple choice questions
-  const handleSelection = (selection: string, messageId: string) => {
+  const handleSelection = async (selection: string, messageId: string) => {
     console.log("Selection clicked:", selection, "Message ID:", messageId, "Current step:", currentStep)
 
     // Update the message to show the selection
@@ -123,10 +164,10 @@ export default function SongDescriptionPage() {
     setMessages((prev) => [...prev, userMessage])
 
     // Process the selection immediately
-    processSelection(selection)
+    await processSelection(selection)
   }
 
-  const processSelection = (selection: string) => {
+  const processSelection = async (selection: string) => {
     console.log("Processing selection:", selection, "for step:", currentStep)
 
     switch (currentStep) {
@@ -136,11 +177,11 @@ export default function SongDescriptionPage() {
 
         if (selection.toLowerCase() === "single") {
           console.log("Single selected, going to artist name")
-          addAssistantMessage("What is the name of the artist for this song?")
+          await addMessageWithTyping("What is the name of the artist for this song?")
           setCurrentStep("artist_name")
         } else {
           console.log("Album/EP selected, going to song title")
-          addAssistantMessage("What is the title of the song you want to describe?")
+          await addMessageWithTyping("What is the title of the song you want to describe?")
           setCurrentStep("song_title")
         }
         break
@@ -150,10 +191,12 @@ export default function SongDescriptionPage() {
         setSongInfo((prev) => ({ ...prev, has_featuring: selection.toLowerCase() }))
 
         if (selection.toLowerCase() === "yes") {
-          addAssistantMessage("What is the name of the featuring artists?")
+          await addMessageWithTyping("What is the name of the featuring artists?")
           setCurrentStep("featuring_artists")
         } else {
-          addAssistantMessage("What genre would you categorize this song as? (e.g., Pop, Hip-Hop, Rock, Electronic)")
+          await addMessageWithTyping(
+            "What genre would you categorize this song as? (e.g., Pop, Hip-Hop, Rock, Electronic)",
+          )
           setCurrentStep("genre")
         }
         break
@@ -163,10 +206,10 @@ export default function SongDescriptionPage() {
         setSongInfo((prev) => ({ ...prev, has_previous_releases: selection.toLowerCase() }))
 
         if (selection.toLowerCase() === "yes") {
-          addAssistantMessage("What is the title of that release and how did it become notable?")
+          await addMessageWithTyping("What is the title of that release and how did it become notable?")
           setCurrentStep("previous_releases_details")
         } else {
-          addAssistantMessage(
+          await addMessageWithTyping(
             "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, etc.)",
           )
           setCurrentStep("additional_info")
@@ -180,7 +223,7 @@ export default function SongDescriptionPage() {
 
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!input.trim() || isProcessing) return
+    if (!input.trim() || isProcessing || isTyping || isRegenerating) return
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
@@ -190,6 +233,7 @@ export default function SongDescriptionPage() {
     }
 
     setMessages((prev) => [...prev, userMessage])
+    const currentInput = input.trim()
     setInput("")
     setIsProcessing(true)
 
@@ -197,77 +241,86 @@ export default function SongDescriptionPage() {
       // Process the user's input based on the current step
       switch (currentStep) {
         case "release_title":
-          setSongInfo((prev) => ({ ...prev, release_title: input.trim() }))
-          addSelectionMessage("Is this a single, album, or EP?", ["Single", "Album", "EP"])
+          setSongInfo((prev) => ({ ...prev, release_title: currentInput }))
+          await addMessageWithTyping("Is this a single, album, or EP?", "selection", ["Single", "Album", "EP"])
           setCurrentStep("release_type")
           break
 
         case "song_title":
-          setSongInfo((prev) => ({ ...prev, song_title: input.trim() }))
-          addAssistantMessage("What is the name of the artist for this song?")
+          setSongInfo((prev) => ({ ...prev, song_title: currentInput }))
+          await addMessageWithTyping("What is the name of the artist for this song?")
           setCurrentStep("artist_name")
           break
 
         case "artist_name":
-          const updatedSongInfo = { ...songInfo, artist_name: input.trim() }
+          const updatedSongInfo = { ...songInfo, artist_name: currentInput }
           setSongInfo(updatedSongInfo)
           const songTitle = updatedSongInfo.song_title || updatedSongInfo.release_title
-          addSelectionMessage(`Does "${songTitle}" have any featuring artists or is it just ${input.trim()}?`, [
-            "Yes",
-            "No",
-          ])
+          await addMessageWithTyping(
+            `Does "${songTitle}" have any featuring artists or is it just ${currentInput}?`,
+            "selection",
+            ["Yes", "No"],
+          )
           setCurrentStep("featuring_question")
           break
 
         case "featuring_artists":
-          setSongInfo((prev) => ({ ...prev, featuring_artists: input.trim() }))
-          addAssistantMessage("What genre would you categorize this song as? (e.g., Pop, Hip-Hop, Rock, Electronic)")
+          setSongInfo((prev) => ({ ...prev, featuring_artists: currentInput }))
+          await addMessageWithTyping(
+            "What genre would you categorize this song as? (e.g., Pop, Hip-Hop, Rock, Electronic)",
+          )
           setCurrentStep("genre")
           break
 
         case "genre":
-          setSongInfo((prev) => ({ ...prev, genre: input.trim() }))
-          addAssistantMessage("What language are the lyrics in? (e.g., English, Romanian, Spanish, etc.)")
+          setSongInfo((prev) => ({ ...prev, genre: currentInput }))
+          await addMessageWithTyping("What language are the lyrics in? (e.g., English, Romanian, Spanish, etc.)")
           setCurrentStep("language")
           break
 
         case "language":
-          setSongInfo((prev) => ({ ...prev, language: input.trim() }))
-          addAssistantMessage(
+          setSongInfo((prev) => ({ ...prev, language: currentInput }))
+          await addMessageWithTyping(
             "How would you describe the mood or emotional tone of the song? (e.g., Energetic, Melancholic, Uplifting, Sad)",
           )
           setCurrentStep("mood")
           break
 
         case "mood":
-          setSongInfo((prev) => ({ ...prev, mood: input.trim() }))
-          addAssistantMessage("What inspired the creation of this song?")
+          setSongInfo((prev) => ({ ...prev, mood: currentInput }))
+          await addMessageWithTyping("What inspired the creation of this song?")
           setCurrentStep("inspiration")
           break
 
         case "inspiration":
-          setSongInfo((prev) => ({ ...prev, inspiration: input.trim() }))
-          addSelectionMessage("Does the artist have any notable previous releases or a signature sound?", ["Yes", "No"])
+          setSongInfo((prev) => ({ ...prev, inspiration: currentInput }))
+          await addMessageWithTyping(
+            "Does the artist have any notable previous releases or a signature sound?",
+            "selection",
+            ["Yes", "No"],
+          )
           setCurrentStep("previous_releases_question")
           break
 
         case "previous_releases_details":
-          setSongInfo((prev) => ({ ...prev, previous_releases_details: input.trim() }))
-          addAssistantMessage(
+          setSongInfo((prev) => ({ ...prev, previous_releases_details: currentInput }))
+          await addMessageWithTyping(
             "Any additional information about the song you'd like to include? (Who produced the instrumental, unique elements, etc.)",
           )
           setCurrentStep("additional_info")
           break
 
         case "additional_info":
-          setSongInfo((prev) => ({ ...prev, additional_info: input.trim() }))
-          addSystemMessage("Analyzing your responses and crafting a unique description...")
+          setSongInfo((prev) => ({ ...prev, additional_info: currentInput }))
+          await addMessageWithTyping(
+            "Perfect! Let me analyze all your responses and craft a unique, professional description...",
+          )
           await generateDescription()
           break
       }
     } catch (error) {
       console.error("Error processing message:", error)
-      addErrorMessage("Sorry, I encountered an error. Please try again.")
+      await addMessageWithTyping("Sorry, I encountered an error. Please try again.", "error")
     } finally {
       setIsProcessing(false)
     }
@@ -298,60 +351,25 @@ export default function SongDescriptionPage() {
     if (result.success && result.description) {
       setFinalDescription(result.description)
       setCharacterCount(result.description.length)
-      addAssistantMessage("Here is your unique, AI-crafted description:")
-      addAssistantMessage(result.description)
-      addSystemMessage(`Character count: ${result.description.length}/500 ✓`)
+      await addMessageWithTyping("Here is your unique, AI-crafted description:")
+      await addMessageWithTyping(result.description)
+      await addMessageWithTyping(`Character count: ${result.description.length}/499 ✓`, "info")
       setCurrentStep("complete")
     } else {
-      addErrorMessage(result.error || "Failed to generate a description. Please try again with different details.")
+      await addMessageWithTyping(
+        result.error || "Failed to generate a description. Please try again with different details.",
+        "error",
+      )
       setCurrentStep("additional_info") // Allow user to retry
     }
   }
 
-  // Helper to add assistant messages
-  const addAssistantMessage = (content: string) => {
-    const message: Message = {
-      id: `assistant-${Date.now()}`,
-      role: "assistant",
-      content,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, message])
-  }
-
-  // Helper to add selection messages
-  const addSelectionMessage = (content: string, selections: string[]) => {
-    const messageId = `selection-${Date.now()}`
-    const message: Message = {
-      id: messageId,
-      role: "selection",
-      content,
-      timestamp: new Date(),
-      selections,
-    }
-    setMessages((prev) => [...prev, message])
-  }
-
-  // Helper to add system messages
-  const addSystemMessage = (content: string) => {
-    const message: Message = {
-      id: `system-${Date.now()}`,
-      role: "info",
-      content,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, message])
-  }
-
-  // Helper to add error messages
-  const addErrorMessage = (content: string) => {
-    const message: Message = {
-      id: `error-${Date.now()}`,
-      role: "error",
-      content,
-      timestamp: new Date(),
-    }
-    setMessages((prev) => [...prev, message])
+  // Handle regenerating description
+  const handleRegenerate = async () => {
+    setIsRegenerating(true)
+    await addMessageWithTyping("🔄 I'll regenerate a brand new unique description for you!")
+    await generateDescription()
+    setIsRegenerating(false)
   }
 
   // Handle copying the description
@@ -396,7 +414,7 @@ export default function SongDescriptionPage() {
 
   // Handle key press for sending messages
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey && !isProcessing) {
+    if (e.key === "Enter" && !e.shiftKey && !isProcessing && !isTyping && !isRegenerating) {
       e.preventDefault()
       handleSendMessage()
     }
@@ -404,13 +422,13 @@ export default function SongDescriptionPage() {
 
   // Get badge color based on character count
   const getBadgeVariant = () => {
-    if (characterCount > 500 || characterCount < 490) return "destructive"
+    if (characterCount > 499 || characterCount < 450) return "destructive"
     return "default"
   }
 
   // Calculate progress percentage for character count
   const getProgressPercentage = () => {
-    return Math.min(100, (characterCount / 500) * 100)
+    return Math.min(100, (characterCount / 499) * 100)
   }
 
   return (
@@ -442,7 +460,7 @@ export default function SongDescriptionPage() {
             <div className="space-y-4">
               {messages.map((message) => (
                 <div key={message.id} className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}>
-                  {(message.role === "assistant" || message.role === "selection") && (
+                  {(message.role === "assistant" || message.role === "selection" || message.role === "typing") && (
                     <Avatar className="h-8 w-8 mr-2">
                       <AvatarImage src="/ai-assistant.png" alt="AI" />
                       <AvatarFallback className="bg-purple-500 text-white">AI</AvatarFallback>
@@ -458,11 +476,34 @@ export default function SongDescriptionPage() {
                           ? "bg-muted"
                           : message.role === "error"
                             ? "bg-red-500/20 text-red-700 dark:text-red-300"
-                            : "bg-amber-500/20 text-amber-700 dark:text-amber-300",
+                            : message.role === "typing"
+                              ? "bg-muted"
+                              : "bg-amber-500/20 text-amber-700 dark:text-amber-300",
                     )}
                   >
                     {message.role === "error" && <AlertCircle className="h-4 w-4 mb-1" />}
-                    <p className="whitespace-pre-wrap mb-2">{message.content}</p>
+
+                    {message.role === "typing" ? (
+                      <div className="flex items-center space-x-1">
+                        <div className="flex space-x-1">
+                          <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                            style={{ animationDelay: "0ms" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                            style={{ animationDelay: "150ms" }}
+                          ></div>
+                          <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                            style={{ animationDelay: "300ms" }}
+                          ></div>
+                        </div>
+                        <span className="text-sm text-muted-foreground ml-2">AI is typing...</span>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap mb-2">{message.content}</p>
+                    )}
 
                     {message.role === "selection" && message.selections && !message.selectedOption && (
                       <div className="flex flex-wrap gap-2 mt-2">
@@ -473,10 +514,10 @@ export default function SongDescriptionPage() {
                               console.log("Button clicked for selection:", selection)
                               handleSelection(selection, message.id)
                             }}
-                            disabled={isProcessing}
+                            disabled={isProcessing || isTyping || isRegenerating}
                             size="sm"
                             variant="outline"
-                            className="bg-white text-black border-gray-300 hover:bg-gray-100"
+                            className="bg-white text-black border-gray-300 hover:bg-gray-100 hover:text-black"
                           >
                             {selection}
                           </Button>
@@ -513,21 +554,25 @@ export default function SongDescriptionPage() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyPress}
                   placeholder={
-                    isProcessing
+                    isProcessing || isTyping || isRegenerating
                       ? "Please wait..."
                       : currentStep === "complete"
                         ? "Start over to create a new description"
                         : "Type your message..."
                   }
-                  disabled={isProcessing || currentStep === "complete"}
+                  disabled={isProcessing || isTyping || isRegenerating || currentStep === "complete"}
                   className="flex-1"
                 />
                 <Button
                   onClick={handleSendMessage}
-                  disabled={isProcessing || !input.trim() || currentStep === "complete"}
+                  disabled={isProcessing || isTyping || isRegenerating || !input.trim() || currentStep === "complete"}
                   size="icon"
                 >
-                  {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <SendHorizontal className="h-4 w-4" />}
+                  {isProcessing || isTyping || isRegenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SendHorizontal className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             )}
@@ -537,12 +582,16 @@ export default function SongDescriptionPage() {
               <div className="flex flex-col gap-2 w-full">
                 <div className="flex justify-between items-center">
                   <Badge variant={getBadgeVariant()}>
-                    {characterCount} characters {characterCount >= 490 && characterCount <= 500 ? "✓" : "⚠️"}
+                    {characterCount} characters {characterCount >= 450 && characterCount <= 499 ? "✓" : "⚠️"}
                   </Badge>
                   <div className="space-x-2">
                     <Button onClick={handleCopy} size="sm" variant="secondary">
                       <Copy className="h-4 w-4 mr-1" />
                       Copy
+                    </Button>
+                    <Button onClick={handleRegenerate} size="sm" variant="outline" disabled={isRegenerating}>
+                      <RotateCcw className="h-4 w-4 mr-1" />
+                      Regenerate
                     </Button>
                     <Button onClick={handleReset} size="sm" variant="outline">
                       <RefreshCw className="h-4 w-4 mr-1" />
