@@ -20,7 +20,7 @@ async function callOpenRouter(messages: any[], max_tokens: number, temperature: 
   console.log("🌐 Making request to OpenRouter API...")
 
   const body: any = {
-    model: "deepseek/deepseek-chat-v3-0324:free",
+    model: "tngtech/deepseek-r1t2-chimera:free",
     messages,
     max_tokens,
     temperature,
