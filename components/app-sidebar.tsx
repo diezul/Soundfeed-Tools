@@ -1,80 +1,52 @@
 "use client"
 
-import { Home, Music, Search, Download, Clock, Link2, Youtube, Fingerprint, Settings, LifeBuoy } from "lucide-react"
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupContent,
-} from "@/components/ui/sidebar"
-import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
+import { Home, Music, ImageIcon, Search, ListMusic, MoreHorizontal } from "lucide-react"
 
-const mainNav = [
-  { title: "Home", href: "/", icon: Home },
-  { title: "Song Description", href: "/song-description", icon: Music },
-  { title: "Artist Finder", href: "/artist-finder", icon: Search },
-  { title: "Artwork Downloader", href: "/artwork-downloader", icon: Download },
-  { title: "BPM Tapper", href: "/bpm-tapper", icon: Clock },
-  { title: "Link to Stream", href: "/link-to-stream", icon: Link2 },
-  { title: "Channel ID Finder", href: "/channel-id-finder", icon: Youtube },
-  { title: "ISRC/UPC Finder", href: "/isrc-upc-finder", icon: Fingerprint },
+const links = [
+  { href: "/", label: "Home", icon: Home },
+  { href: "/song-description", label: "Song Description", icon: Music },
+  { href: "/artwork-downloader", label: "Artwork", icon: ImageIcon },
+  { href: "/artist-finder", label: "Artist Finder", icon: Search },
+  { href: "/link-to-stream", label: "Link to Stream", icon: ListMusic },
 ]
 
-const secondaryNav = [
-  { title: "Settings", href: "/settings", icon: Settings },
-  { title: "Support", href: "/support", icon: LifeBuoy },
-]
+export function AppSidebar({ className }: { className?: string }) {
+  const pathname = usePathname()
 
-export function AppSidebar() {
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <div className="flex items-center gap-2 p-2">
-          <Music className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold">Soundfeed Tools</h1>
-        </div>
-      </SidebarHeader>
-      <SidebarContent className="p-2">
-        <SidebarGroup>
-          <SidebarGroupLabel>Tools</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNav.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <Link href={item.href}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="p-2">
-        <Separator className="my-2" />
-        <SidebarMenu>
-          {secondaryNav.map((item) => (
-            <SidebarMenuItem key={item.title}>
-              <SidebarMenuButton asChild>
-                <Link href={item.href}>
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.title}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarFooter>
-    </Sidebar>
+    <aside
+      className={cn(
+        "flex flex-col gap-2 p-4 w-full md:w-64 shrink-0 border-r border-border bg-background/70 backdrop-blur",
+        className,
+      )}
+    >
+      <div className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <MoreHorizontal className="h-5 w-5 text-purple-500" />
+        Soundfeed&nbsp;Tools
+      </div>
+      <nav className="space-y-1">
+        {links.map(({ href, label, icon: Icon }) => {
+          const active = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                active
+                  ? "bg-purple-600/20 text-purple-600 dark:text-purple-400"
+                  : "hover:bg-muted hover:text-foreground/90 text-foreground/70",
+              )}
+            >
+              <Icon className="h-4 w-4 shrink-0" />
+              {label}
+            </Link>
+          )
+        })}
+      </nav>
+    </aside>
   )
 }
